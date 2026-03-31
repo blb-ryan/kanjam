@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createInitialGameState, applyThrow, undoLastThrow, canUndo } from '../utils/gameLogic'
-import { doc, setDoc, getDoc } from 'firebase/firestore'
+import { doc, setDoc } from 'firebase/firestore'
 import { db } from '../utils/firebase'
 
 const DRAFT_KEY = 'kanjam_active_game'
 const SYNC_INTERVAL = 30000
 
-export function useGameEngine(team1, team2, existingGame = null) {
+export function useGameEngine(team1, team2, existingGame = null, roomCode = null) {
   const [gameState, setGameState] = useState(() => {
     if (existingGame) return existingGame
     return createInitialGameState(team1, team2)
   })
-  const [gameId] = useState(() => existingGame?.id || crypto.randomUUID())
+  // Use roomCode as the Firestore doc ID when available (enables join-by-code)
+  const [gameId] = useState(() => existingGame?.id || roomCode || crypto.randomUUID())
   const syncTimerRef = useRef(null)
 
   // Persist to localStorage as a quick local cache
@@ -19,7 +20,7 @@ export function useGameEngine(team1, team2, existingGame = null) {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...gameState, id: gameId }))
   }, [gameState, gameId])
 
-  // Periodic Firestore sync
+  // Periodic Firestore sync + visibility-change sync
   useEffect(() => {
     const sync = () => {
       if (gameState.status === 'active') {
@@ -43,17 +44,19 @@ export function useGameEngine(team1, team2, existingGame = null) {
   const recordThrow = useCallback((throwType) => {
     setGameState(prev => {
       const next = applyThrow(prev, throwType)
-      // If round just ended or game over, sync to Firestore immediately
-      if (next.status === 'complete' || next.currentHalf === 0) {
-        setDoc(doc(db, 'games', gameId), { ...next, id: gameId }).catch(() => {})
-      }
+      // Always sync to Firestore after every throw so joined phones see live scores
+      setDoc(doc(db, 'games', gameId), { ...next, id: gameId }).catch(() => {})
       return next
     })
   }, [gameId])
 
   const undo = useCallback(() => {
-    setGameState(prev => undoLastThrow(prev))
-  }, [])
+    setGameState(prev => {
+      const next = undoLastThrow(prev)
+      setDoc(doc(db, 'games', gameId), { ...next, id: gameId }).catch(() => {})
+      return next
+    })
+  }, [gameId])
 
   const canUndoNow = canUndo(gameState)
 

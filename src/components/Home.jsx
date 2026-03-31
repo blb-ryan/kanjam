@@ -4,6 +4,7 @@ import { VERSION_LABEL } from '../utils/version'
 
 const NAV_ITEMS = [
   { label: 'Quick Game', icon: '🥏', path: '/setup', color: 'var(--color-orange)' },
+  { label: 'Join Game', icon: '🔗', path: '/join', color: 'var(--color-yellow)' },
   { label: 'Tournament', icon: '🏆', path: '/tournament-setup', color: 'var(--color-blue)' },
   { label: 'Game History', icon: '📋', path: '/history', color: 'var(--color-lime)' },
   { label: 'Player Stats', icon: '📊', path: '/stats', color: 'var(--color-yellow)' },

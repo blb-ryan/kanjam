@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlayers } from '../hooks/useFirestore'
 import PlayerCard from './PlayerCard'
+import { generateUniqueRoomCode } from '../utils/roomCode'
 
 const TEAM_COLORS = ['var(--color-team1)', 'var(--color-team2)']
 
@@ -16,6 +17,7 @@ export default function PlayerSetup() {
   const [search, setSearch] = useState('')
   const [newPlayerName, setNewPlayerName] = useState('')
   const [adding, setAdding] = useState(false)
+  const [generating, setGenerating] = useState(false)
   const [activeTeam, setActiveTeam] = useState(1) // which team tab we're assigning to
 
   const filtered = useMemo(() => {
@@ -66,22 +68,28 @@ export default function PlayerSetup() {
 
   const canStart = team1Players.length === 2 && team2Players.length === 2
 
-  const handleStart = () => {
-    const t1Name = team1Name.trim() || autoTeamName(1)
-    const t2Name = team2Name.trim() || autoTeamName(2)
-    const team1 = {
-      id: crypto.randomUUID(),
-      name: t1Name,
-      playerIds: team1Players,
-      playerNames: team1Players.map(id => players.find(p => p.id === id)?.name || 'Player'),
+  const handleStart = async () => {
+    setGenerating(true)
+    try {
+      const roomCode = await generateUniqueRoomCode()
+      const t1Name = team1Name.trim() || autoTeamName(1)
+      const t2Name = team2Name.trim() || autoTeamName(2)
+      const team1 = {
+        id: crypto.randomUUID(),
+        name: t1Name,
+        playerIds: team1Players,
+        playerNames: team1Players.map(id => players.find(p => p.id === id)?.name || 'Player'),
+      }
+      const team2 = {
+        id: crypto.randomUUID(),
+        name: t2Name,
+        playerIds: team2Players,
+        playerNames: team2Players.map(id => players.find(p => p.id === id)?.name || 'Player'),
+      }
+      navigate('/game', { state: { team1, team2, roomCode } })
+    } catch {
+      setGenerating(false)
     }
-    const team2 = {
-      id: crypto.randomUUID(),
-      name: t2Name,
-      playerIds: team2Players,
-      playerNames: team2Players.map(id => players.find(p => p.id === id)?.name || 'Player'),
-    }
-    navigate('/game', { state: { team1, team2 } })
   }
 
   const playerSelectionFor = (teamNum) => {
@@ -247,7 +255,7 @@ export default function PlayerSetup() {
       <button
         className="btn btn-primary"
         onClick={handleStart}
-        disabled={!canStart}
+        disabled={!canStart || generating}
         style={{
           width: '100%',
           fontFamily: 'var(--font-display)',
@@ -256,7 +264,7 @@ export default function PlayerSetup() {
           padding: '16px',
         }}
       >
-        START GAME
+        {generating ? 'CREATING GAME...' : 'START GAME'}
       </button>
     </div>
   )

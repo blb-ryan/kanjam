@@ -10,6 +10,7 @@ import PlayerStats from './components/PlayerStats'
 import TournamentSetup from './components/TournamentSetup'
 import TournamentBracket from './components/TournamentBracket'
 import ProfileSetup from './components/ProfileSetup'
+import JoinGame from './components/JoinGame'
 import './styles/global.css'
 
 function AppRoutes() {
@@ -42,6 +43,7 @@ function AppRoutes() {
       <Route path="/stats" element={<PlayerStats />} />
       <Route path="/tournament-setup" element={<TournamentSetup />} />
       <Route path="/tournament" element={<TournamentBracket />} />
+      <Route path="/join" element={<JoinGame />} />
     </Routes>
   )
 }

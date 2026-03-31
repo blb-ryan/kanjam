@@ -15,12 +15,22 @@ export default function LiveGame() {
   // Allow resuming from localStorage if no state passed
   const initData = location.state || getStoredActiveGame()
 
-  const { team1, team2 } = initData || {}
+  const { team1, team2, roomCode: initRoomCode } = initData || {}
   const existingGame = initData?.status === 'active' ? initData : null
 
   const { gameState, gameId, recordThrow, undo, canUndoNow } = useGameEngine(
-    team1, team2, existingGame
+    team1, team2, existingGame, initRoomCode
   )
+
+  const [codeCopied, setCodeCopied] = useState(false)
+  const isRoomCodeGame = gameId?.length === 4
+
+  const handleCopyCode = () => {
+    navigator.clipboard?.writeText(gameId).then(() => {
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 1500)
+    })
+  }
 
   const [bustAnim, setBustAnim] = useState(false)
   const [showBustText, setShowBustText] = useState(false)
@@ -104,6 +114,38 @@ export default function LiveGame() {
         roundNumber={currentRound}
         isOvertime={isOvertime}
       />
+
+      {/* Game code badge */}
+      {isRoomCodeGame && (
+        <button
+          onClick={handleCopyCode}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            background: 'var(--color-bg-elevated)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 'var(--radius-md)',
+            padding: '10px 16px',
+            cursor: 'pointer',
+            transition: 'border-color 0.2s',
+            borderColor: codeCopied ? 'var(--color-orange)' : 'rgba(255,255,255,0.1)',
+          }}
+        >
+          <div>
+            <div style={{ fontSize: '0.65rem', color: 'var(--color-text-dim)', letterSpacing: '0.15em', fontFamily: 'var(--font-display)' }}>
+              GAME CODE
+            </div>
+            <div style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)', letterSpacing: '0.3em', color: 'var(--color-orange)' }}>
+              {gameId}
+            </div>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: codeCopied ? 'var(--color-orange)' : 'var(--color-text-dim)' }}>
+            {codeCopied ? '✓ Copied!' : 'Tap to copy'}
+          </div>
+        </button>
+      )}
 
       {/* Turn indicator */}
       <div className="card" style={{
