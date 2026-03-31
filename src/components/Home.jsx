@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getStoredActiveGame } from '../hooks/useGameEngine'
 import { VERSION_LABEL } from '../utils/version'
+import { getPrefs, setPrefs } from '../utils/prefs'
 
 const NAV_ITEMS = [
   { label: 'Quick Game', icon: '🥏', path: '/setup', color: 'var(--color-orange)' },
@@ -15,10 +17,26 @@ export default function Home() {
   const activeGame = getStoredActiveGame()
   const hasResume = activeGame && activeGame.status === 'active'
 
+  const [isSunMode, setIsSunMode] = useState(() => getPrefs().theme === 'sun')
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isSunMode ? 'sun' : 'dark')
+    setPrefs({ theme: isSunMode ? 'sun' : 'dark' })
+  }, [isSunMode])
+
+  // Apply saved theme on mount
+  useEffect(() => {
+    const saved = getPrefs().theme
+    if (saved === 'sun') {
+      setIsSunMode(true)
+      document.documentElement.setAttribute('data-theme', 'sun')
+    }
+  }, [])
+
   return (
     <div className="screen" style={{ justifyContent: 'space-between', padding: '20px 16px' }}>
       {/* Header */}
-      <div style={{ textAlign: 'center', paddingTop: 24 }}>
+      <div style={{ textAlign: 'center', paddingTop: 24, position: 'relative' }}>
         <div style={{
           fontSize: '0.75rem',
           letterSpacing: '0.3em',
@@ -48,6 +66,26 @@ export default function Home() {
           borderRadius: 2,
           margin: '0 auto',
         }} />
+
+        {/* Sun / Dark mode toggle */}
+        <button
+          onClick={() => setIsSunMode(v => !v)}
+          title={isSunMode ? 'Switch to dark mode' : 'Switch to sun mode'}
+          style={{
+            position: 'absolute',
+            top: 24,
+            right: 0,
+            background: isSunMode ? 'rgba(255,214,0,0.15)' : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${isSunMode ? 'rgba(255,214,0,0.4)' : 'rgba(255,255,255,0.12)'}`,
+            borderRadius: 'var(--radius-sm)',
+            padding: '6px 10px',
+            fontSize: '1.1rem',
+            cursor: 'pointer',
+            lineHeight: 1,
+          }}
+        >
+          {isSunMode ? '🌙' : '☀️'}
+        </button>
       </div>
 
       {/* Resume banner */}

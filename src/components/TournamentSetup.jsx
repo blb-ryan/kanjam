@@ -1,22 +1,35 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { usePlayers, useTournaments } from '../hooks/useFirestore'
-import { generateSingleEliminationBracket } from '../utils/bracketLogic'
+import { usePlayers, useTournaments, useGames } from '../hooks/useFirestore'
+import {
+  generateSingleEliminationBracket,
+  generateDoubleEliminationBracket,
+  generateRoundRobin,
+  seedTeamsByWinRate,
+} from '../utils/bracketLogic'
+
+const FORMATS = [
+  { key: 'single_elimination', label: 'Single Elim', desc: 'One loss and you\'re out' },
+  { key: 'double_elimination', label: 'Double Elim', desc: 'Two losses to be eliminated' },
+  { key: 'round_robin', label: 'Round Robin', desc: 'Everyone plays everyone' },
+]
 
 export default function TournamentSetup() {
   const navigate = useNavigate()
   const { players, loading, createPlayer } = usePlayers()
   const { saveTournament } = useTournaments()
+  const { games } = useGames()
 
   const [name, setName] = useState('')
   const [format, setFormat] = useState('single_elimination')
-  const [teams, setTeams] = useState([]) // [{id, name, playerIds: [id1, id2]}]
-  const [step, setStep] = useState('config') // config | add-team
+  const [teams, setTeams] = useState([])
+  const [step, setStep] = useState('config')
   const [newTeamPlayers, setNewTeamPlayers] = useState([])
   const [newTeamName, setNewTeamName] = useState('')
   const [search, setSearch] = useState('')
   const [newPlayerName, setNewPlayerName] = useState('')
   const [starting, setStarting] = useState(false)
+  const [seedByWinRate, setSeedByWinRate] = useState(false)
 
   const filtered = useMemo(() => {
     if (!search.trim()) return players
@@ -33,9 +46,8 @@ export default function TournamentSetup() {
     }
   }
 
-  const autoTeamName = () => {
-    return newTeamPlayers.map(id => players.find(p => p.id === id)?.name || '').filter(Boolean).join(' & ')
-  }
+  const autoTeamName = () =>
+    newTeamPlayers.map(id => players.find(p => p.id === id)?.name || '').filter(Boolean).join(' & ')
 
   const handleConfirmTeam = () => {
     if (newTeamPlayers.length < 2) return
@@ -62,17 +74,34 @@ export default function TournamentSetup() {
     setTeams(t => [...t].sort(() => Math.random() - 0.5))
   }
 
+  const handleSeedByWinRate = () => {
+    const seeded = seedTeamsByWinRate(teams, games)
+    setTeams(seeded)
+    setSeedByWinRate(true)
+  }
+
   const handleStart = async () => {
     if (teams.length < 3) return
     setStarting(true)
-    const bracket = generateSingleEliminationBracket(teams)
+
+    const seededTeams = seedByWinRate ? teams : teams
+
+    let bracket
+    if (format === 'single_elimination') {
+      bracket = generateSingleEliminationBracket(seededTeams)
+    } else if (format === 'double_elimination') {
+      bracket = generateDoubleEliminationBracket(seededTeams)
+    } else {
+      bracket = generateRoundRobin(seededTeams)
+    }
+
     const id = crypto.randomUUID()
     const tournamentData = {
       id,
       name: name.trim() || `Tournament ${new Date().toLocaleDateString()}`,
       format,
-      teamIds: teams.map(t => t.id),
-      teams,
+      teamIds: seededTeams.map(t => t.id),
+      teams: seededTeams,
       bracket,
       championId: null,
       createdAt: new Date().toISOString(),
@@ -99,11 +128,7 @@ export default function TournamentSetup() {
           value={newTeamName}
           onChange={e => setNewTeamName(e.target.value)}
           placeholder={`Team name (default: "${autoTeamName() || 'Team Name'}")`}
-          style={{
-            width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)',
-            background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)',
-            color: 'var(--color-text)', fontSize: '1rem', marginBottom: 12,
-          }}
+          style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--color-text)', fontSize: '1rem', marginBottom: 12 }}
         />
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
@@ -111,11 +136,7 @@ export default function TournamentSetup() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search players..."
-            style={{
-              flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-md)',
-              background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)',
-              color: 'var(--color-text)', fontSize: '1rem',
-            }}
+            style={{ flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--color-text)', fontSize: '1rem' }}
           />
         </div>
 
@@ -125,11 +146,7 @@ export default function TournamentSetup() {
             onChange={e => setNewPlayerName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddNewPlayer()}
             placeholder="Add new player..."
-            style={{
-              flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-md)',
-              background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)',
-              color: 'var(--color-text)', fontSize: '1rem',
-            }}
+            style={{ flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--color-text)', fontSize: '1rem' }}
           />
           <button className="btn btn-primary" onClick={handleAddNewPlayer} disabled={!newPlayerName.trim()} style={{ padding: '10px 16px', minHeight: 0 }}>
             + Add
@@ -193,47 +210,57 @@ export default function TournamentSetup() {
         value={name}
         onChange={e => setName(e.target.value)}
         placeholder="Tournament name..."
-        style={{
-          width: '100%', padding: '12px 14px', borderRadius: 'var(--radius-md)',
-          background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)',
-          color: 'var(--color-text)', fontSize: '1rem', marginBottom: 14,
-        }}
+        style={{ width: '100%', padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--color-text)', fontSize: '1rem', marginBottom: 14 }}
       />
 
+      {/* Format */}
       <div className="section-title">Format</div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        {[{ key: 'single_elimination', label: 'Single Elimination' }, { key: 'double_elimination', label: 'Double Elimination (coming soon)', disabled: true }].map(opt => (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+        {FORMATS.map(opt => (
           <button
             key={opt.key}
-            onClick={() => !opt.disabled && setFormat(opt.key)}
-            disabled={opt.disabled}
+            onClick={() => setFormat(opt.key)}
             style={{
-              flex: 1, padding: '10px', borderRadius: 'var(--radius-md)',
-              background: format === opt.key ? 'var(--color-blue)' : 'var(--color-bg-elevated)',
-              color: format === opt.key ? '#fff' : 'var(--color-text-muted)',
-              fontSize: '0.8rem', fontWeight: 600, border: 'none', cursor: opt.disabled ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '12px 14px', borderRadius: 'var(--radius-md)',
+              background: format === opt.key ? 'var(--color-blue)22' : 'var(--color-bg-elevated)',
+              border: `2px solid ${format === opt.key ? 'var(--color-blue)' : 'transparent'}`,
+              cursor: 'pointer', textAlign: 'left',
             }}
           >
-            {opt.label}
+            <div style={{
+              width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+              background: format === opt.key ? 'var(--color-blue)' : 'var(--color-bg-card)',
+              border: `2px solid ${format === opt.key ? 'var(--color-blue)' : 'rgba(255,255,255,0.2)'}`,
+            }} />
+            <div>
+              <div style={{ fontWeight: 700, color: format === opt.key ? 'var(--color-text)' : 'var(--color-text-muted)' }}>{opt.label}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)' }}>{opt.desc}</div>
+            </div>
           </button>
         ))}
       </div>
 
+      {/* Teams */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div className="section-title" style={{ margin: 0 }}>Teams ({teams.length})</div>
-        {teams.length > 1 && (
-          <button className="btn btn-ghost" onClick={handleShuffle} style={{ minHeight: 0, padding: '4px 10px', fontSize: '0.8rem' }}>
-            🔀 Shuffle seeds
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          {teams.length > 1 && (
+            <button className="btn btn-ghost" onClick={handleSeedByWinRate} style={{ minHeight: 0, padding: '4px 10px', fontSize: '0.75rem' }}>
+              📊 Seed by W%
+            </button>
+          )}
+          {teams.length > 1 && (
+            <button className="btn btn-ghost" onClick={handleShuffle} style={{ minHeight: 0, padding: '4px 10px', fontSize: '0.75rem' }}>
+              🔀 Shuffle
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
         {teams.map((t, i) => (
-          <div key={t.id} className="card" style={{
-            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-            border: '1px solid rgba(255,255,255,0.06)',
-          }}>
+          <div key={t.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid rgba(255,255,255,0.06)' }}>
             <span style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text-dim)', width: 24 }}>#{i + 1}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700 }}>{t.name}</div>
@@ -252,11 +279,7 @@ export default function TournamentSetup() {
       </div>
 
       {teams.length < 16 && (
-        <button
-          className="btn btn-secondary"
-          onClick={() => setStep('add-team')}
-          style={{ width: '100%', marginBottom: 16 }}
-        >
+        <button className="btn btn-secondary" onClick={() => setStep('add-team')} style={{ width: '100%', marginBottom: 16 }}>
           + Add Team
         </button>
       )}

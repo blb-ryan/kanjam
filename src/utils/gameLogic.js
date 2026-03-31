@@ -125,9 +125,6 @@ export function applyThrow(gameState, throwType) {
   if (currentHalf === 0) {
     // Team 1 just threw — move to team 2's turn
     newCurrentHalf = 1
-
-    // Check if team1 hit exactly 21 — they might win after team2 throws
-    // (no action yet — just advance the half)
   } else {
     // Team 2 just threw — end of round
     newCurrentHalf = 0
@@ -205,14 +202,11 @@ function recordThrowInRounds(rounds, roundNumber, half, throwRecord) {
 }
 
 export function canUndo(gameState) {
-  // Can undo if at least one throw has been recorded
   const { rounds, currentRound, currentHalf } = gameState
   if (currentHalf === 1) {
-    // Team 2 hasn't thrown yet this round, so team1 throw is the last one
     const round = rounds.find(r => r.roundNumber === currentRound)
     return round && round.team1Throw
   }
-  // We're at the start of a round (half===0) — last throw was team2 of previous round
   return currentRound > 1 || rounds.length > 0
 }
 
@@ -220,7 +214,6 @@ export function undoLastThrow(gameState) {
   const { rounds, currentRound, currentHalf, team1Score, team2Score } = gameState
 
   if (currentHalf === 1) {
-    // Undo team1's throw this round
     const round = rounds.find(r => r.roundNumber === currentRound)
     if (!round || !round.team1Throw) return gameState
 
@@ -239,7 +232,6 @@ export function undoLastThrow(gameState) {
       lastThrow: null,
     }
   } else {
-    // Undo team2's throw from previous round
     const prevRound = rounds.find(r => r.roundNumber === currentRound - 1)
     if (!prevRound || !prevRound.team2Throw) return gameState
 
@@ -250,7 +242,6 @@ export function undoLastThrow(gameState) {
       r.roundNumber === currentRound - 1 ? { ...r, team2Throw: undefined } : r
     )
 
-    // Also need to revert overtime/win status
     const prevTeam2Score = team2Score - pointsToRemove
 
     return {
@@ -268,6 +259,8 @@ export function undoLastThrow(gameState) {
   }
 }
 
+// ─── Stats calculations ────────────────────────────────────────────────────
+
 export function calculatePlayerStats(games, players) {
   const stats = {}
 
@@ -282,17 +275,27 @@ export function calculatePlayerStats(games, players) {
       instantWins: 0,
       busts: 0,
       throws: 0,
+      overtimeWins: 0,         // clutch: won a game that went to OT
+      throwBreakdown: { miss: 0, dinger: 0, deuce: 0, bucket: 0, instant_win: 0 },
+      // For streak calculation — sorted list of W/L results
+      _results: [],            // [{ won: bool, completedAt: string }]
     }
   }
 
-  for (const game of games) {
+  // Sort games by completedAt so streaks are chronological
+  const sortedGames = [...games].sort((a, b) => {
+    const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0
+    const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0
+    return aTime - bTime
+  })
+
+  for (const game of sortedGames) {
     const allThrows = []
     for (const round of game.rounds || []) {
-      if (round.team1Throw) allThrows.push({ ...round.team1Throw, teamId: game.team1Id })
-      if (round.team2Throw) allThrows.push({ ...round.team2Throw, teamId: game.team2Id })
+      if (round.team1Throw) allThrows.push({ ...round.team1Throw, teamId: game.team1?.id })
+      if (round.team2Throw) allThrows.push({ ...round.team2Throw, teamId: game.team2?.id })
     }
 
-    // Figure out which players were in this game
     const playersInGame = new Set()
     for (const t of allThrows) {
       if (t.throwerPlayerId) playersInGame.add(t.throwerPlayerId)
@@ -302,10 +305,16 @@ export function calculatePlayerStats(games, players) {
       if (!stats[pid]) continue
       stats[pid].gamesPlayed++
 
-      // Determine which team this player is on
       const playerTeamId = allThrows.find(t => t.throwerPlayerId === pid)?.teamId
-      if (game.winnerId === playerTeamId) stats[pid].wins++
-      else stats[pid].losses++
+      const won = game.winnerId === playerTeamId
+      if (won) {
+        stats[pid].wins++
+        if (game.isOvertime) stats[pid].overtimeWins++
+      } else {
+        stats[pid].losses++
+      }
+
+      stats[pid]._results.push({ won, completedAt: game.completedAt || '' })
     }
 
     for (const t of allThrows) {
@@ -315,8 +324,69 @@ export function calculatePlayerStats(games, players) {
       if (!t.busted) s.totalPoints += t.points || 0
       if (t.busted) s.busts++
       if (t.type === THROW_TYPES.INSTANT_WIN) s.instantWins++
+      if (s.throwBreakdown[t.type] !== undefined) s.throwBreakdown[t.type]++
     }
   }
 
+  // Compute streaks from _results (already chronological)
+  for (const s of Object.values(stats)) {
+    const results = s._results
+    let currentStreak = 0
+    let longestStreak = 0
+    let currentStreakType = null
+
+    for (let i = results.length - 1; i >= 0; i--) {
+      const won = results[i].won
+      if (i === results.length - 1) {
+        currentStreakType = won
+        currentStreak = 1
+      } else if (won === currentStreakType) {
+        currentStreak++
+      } else {
+        break
+      }
+    }
+
+    let runStreak = 0
+    let runType = null
+    for (const r of results) {
+      if (runType === null) { runType = r.won; runStreak = 1 }
+      else if (r.won === runType) { runStreak++ }
+      else { runType = r.won; runStreak = 1 }
+      if (r.won && runStreak > longestStreak) longestStreak = runStreak
+    }
+
+    s.currentStreak = currentStreak
+    s.currentStreakWin = currentStreakType === true
+    s.longestWinStreak = longestStreak
+
+    delete s._results
+  }
+
   return Object.values(stats)
+}
+
+// Head-to-head record between two sets of playerIds
+export function calculateHeadToHead(games, playerIds1, playerIds2) {
+  const set1 = new Set(playerIds1)
+  const set2 = new Set(playerIds2)
+  let wins = 0, losses = 0
+
+  for (const game of games) {
+    const t1Ids = new Set(game.team1?.playerIds || [])
+    const t2Ids = new Set(game.team2?.playerIds || [])
+
+    const t1IsSet1 = playerIds1.every(id => t1Ids.has(id)) && t1Ids.size === playerIds1.length
+    const t1IsSet2 = playerIds2.every(id => t1Ids.has(id)) && t1Ids.size === playerIds2.length
+    const t2IsSet1 = playerIds1.every(id => t2Ids.has(id)) && t2Ids.size === playerIds1.length
+    const t2IsSet2 = playerIds2.every(id => t2Ids.has(id)) && t2Ids.size === playerIds2.length
+
+    if ((t1IsSet1 && t2IsSet2) || (t1IsSet2 && t2IsSet1)) {
+      const set1TeamId = t1IsSet1 ? game.team1?.id : game.team2?.id
+      if (game.winnerId === set1TeamId) wins++
+      else losses++
+    }
+  }
+
+  return { wins, losses, total: wins + losses }
 }

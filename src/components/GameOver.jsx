@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import ConfettiEffect from './ConfettiEffect'
 import { clearStoredActiveGame } from '../hooks/useGameEngine'
+import { generateUniqueRoomCode } from '../utils/roomCode'
 import { THROW_TYPES } from '../utils/gameLogic'
 
 const THROW_LABELS = {
@@ -15,9 +16,19 @@ const THROW_LABELS = {
 export default function GameOver() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { gameState, gameId } = location.state || {}
+  const {
+    gameState, gameId,
+    returnTo, tournamentState,
+    tournamentRound, tournamentMatchupIndex,
+    tournamentSide, tournamentMatchupId,
+    tournamentIsGrandFinal,
+  } = location.state || {}
+
+  const isTournamentGame = returnTo === '/tournament' && tournamentState
 
   const [showRounds, setShowRounds] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const [rematching, setRematching] = useState(false)
 
   if (!gameState) {
     return (
@@ -37,18 +48,19 @@ export default function GameOver() {
   const isTeam1Winner = winnerId === team1?.id
   const winColor = isTeam1Winner ? 'var(--color-team1)' : 'var(--color-team2)'
 
-  // Per-player stats for this game
+  // Per-player stats
   const playerStats = {}
   for (const round of rounds || []) {
-    for (const [key, thr] of [['team1Throw', round.team1Throw], ['team2Throw', round.team2Throw]]) {
+    for (const [, thr] of [['team1Throw', round.team1Throw], ['team2Throw', round.team2Throw]]) {
       if (!thr) continue
       const pid = thr.throwerPlayerId
       if (!pid) continue
-      if (!playerStats[pid]) playerStats[pid] = { throws: 0, points: 0, busts: 0, instantWins: 0 }
+      if (!playerStats[pid]) playerStats[pid] = { throws: 0, points: 0, busts: 0, instantWins: 0, breakdown: {} }
       playerStats[pid].throws++
       if (!thr.busted) playerStats[pid].points += thr.points || 0
       if (thr.busted) playerStats[pid].busts++
       if (thr.type === THROW_TYPES.INSTANT_WIN) playerStats[pid].instantWins++
+      playerStats[pid].breakdown[thr.type] = (playerStats[pid].breakdown[thr.type] || 0) + 1
     }
   }
 
@@ -60,9 +72,48 @@ export default function GameOver() {
     return allPlayers.find(p => p.id === playerId)?.name || 'Player'
   }
 
-  const handleRematch = () => {
-    clearStoredActiveGame()
-    navigate('/game', { state: { team1, team2 } })
+  const handleRematch = async () => {
+    setRematching(true)
+    try {
+      clearStoredActiveGame()
+      // Flip teams for rematch
+      const roomCode = await generateUniqueRoomCode()
+      navigate('/game', { state: { team1: team2, team2: team1, roomCode } })
+    } catch {
+      setRematching(false)
+    }
+  }
+
+  const handleShare = async () => {
+    setSharing(true)
+
+    const winnerName = winningTeam?.name || 'Unknown'
+    const loserName = (winnerId === team1?.id ? team2 : team1)?.name || 'Unknown'
+    const winScore = isTeam1Winner ? team1Score : team2Score
+    const loseScore = isTeam1Winner ? team2Score : team1Score
+
+    const suffix = winType === 'instant_win' ? ' (Instant Win!)' : isOvertime ? ' (Overtime)' : ''
+
+    const text = [
+      `🥏 KAN JAM RESULTS${suffix}`,
+      ``,
+      `🏆 ${winnerName}: ${winScore}`,
+      `   ${loserName}: ${loseScore}`,
+      ``,
+      `Played on KanJam Scorer — https://blb-ryan.github.io/kanjam/`,
+    ].join('\n')
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Kan Jam Results', text })
+      } else {
+        await navigator.clipboard.writeText(text)
+        alert('Score copied to clipboard!')
+      }
+    } catch {
+      // User cancelled share
+    }
+    setSharing(false)
   }
 
   return (
@@ -156,9 +207,12 @@ export default function GameOver() {
               borderBottom: '1px solid rgba(255,255,255,0.05)',
             }}>
               <span style={{ fontWeight: 600 }}>{getPlayerName(pid)}</span>
-              <div style={{ display: 'flex', gap: 12, fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+              <div style={{ display: 'flex', gap: 10, fontSize: '0.8rem', color: 'var(--color-text-muted)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <span>+{s.points}pts</span>
-                {s.busts > 0 && <span style={{ color: 'var(--color-danger)' }}>{s.busts} bust{s.busts > 1 ? 's' : ''}</span>}
+                {s.breakdown.bucket > 0 && <span style={{ color: 'var(--color-orange)' }}>🪣×{s.breakdown.bucket}</span>}
+                {s.breakdown.deuce > 0 && <span style={{ color: 'var(--color-blue)' }}>💥×{s.breakdown.deuce}</span>}
+                {s.breakdown.dinger > 0 && <span style={{ color: 'var(--color-lime)' }}>🎯×{s.breakdown.dinger}</span>}
+                {s.busts > 0 && <span style={{ color: 'var(--color-danger)' }}>💔×{s.busts}</span>}
                 {s.instantWins > 0 && <span style={{ color: 'var(--color-yellow)' }}>⚡ IW</span>}
               </div>
             </div>
@@ -211,12 +265,52 @@ export default function GameOver() {
 
       {/* Actions */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <button className="btn btn-primary" onClick={handleRematch} style={{ width: '100%', fontFamily: 'var(--font-display)', letterSpacing: '0.08em' }}>
-          🔄 REMATCH
+        {isTournamentGame ? (
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              clearStoredActiveGame()
+              const gameResult = tournamentIsGrandFinal
+                ? { isGrandFinal: true, winnerId, gameId }
+                : tournamentMatchupId
+                  ? { matchupId: tournamentMatchupId, winnerId, team1Score, team2Score, gameId }
+                  : { side: tournamentSide, roundNumber: tournamentRound, matchupIndex: tournamentMatchupIndex, winnerId, gameId }
+              navigate('/tournament', {
+                state: { tournament: tournamentState, gameResult },
+              })
+            }}
+            style={{ width: '100%', fontFamily: 'var(--font-display)', letterSpacing: '0.08em' }}
+          >
+            🏆 BACK TO BRACKET
+          </button>
+        ) : (
+          <button
+            className="btn btn-primary"
+            onClick={handleRematch}
+            disabled={rematching}
+            style={{ width: '100%', fontFamily: 'var(--font-display)', letterSpacing: '0.08em' }}
+          >
+            {rematching ? 'SETTING UP...' : '🔄 REMATCH (TEAMS FLIP)'}
+          </button>
+        )}
+        <button
+          className="btn"
+          onClick={handleShare}
+          disabled={sharing}
+          style={{
+            width: '100%',
+            background: 'var(--color-bg-elevated)',
+            color: 'var(--color-text)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        >
+          {sharing ? 'Sharing...' : '📤 Share Score Card'}
         </button>
-        <button className="btn btn-secondary" onClick={() => { clearStoredActiveGame(); navigate('/setup') }} style={{ width: '100%' }}>
-          New Game
-        </button>
+        {!isTournamentGame && (
+          <button className="btn btn-secondary" onClick={() => { clearStoredActiveGame(); navigate('/setup') }} style={{ width: '100%' }}>
+            New Game
+          </button>
+        )}
         <button className="btn btn-ghost" onClick={() => { clearStoredActiveGame(); navigate('/') }} style={{ width: '100%' }}>
           Home
         </button>

@@ -39,3 +39,25 @@
   --shadow-card: 0 4px 24px rgba(0,0,0,0.4);
   --shadow-btn: 0 4px 12px rgba(0,0,0,0.4);
 }
+
+/* ── Sun / Bright Mode ── */
+[data-theme="sun"] {
+  --color-bg: #f5f0e8;
+  --color-bg-card: #ffffff;
+  --color-bg-elevated: #ede8dc;
+
+  --color-team1: #d94e00;
+  --color-team1-glow: rgba(217,78,0,0.25);
+  --color-team2: #0066cc;
+  --color-team2-glow: rgba(0,102,204,0.25);
+
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-text-dim: #9ca3af;
+
+  --color-success: #16a34a;
+  --color-danger: #dc2626;
+
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.10);
+  --shadow-btn: 0 2px 8px rgba(0,0,0,0.12);
+}

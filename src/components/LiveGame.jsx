@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useGameEngine, getStoredActiveGame } from '../hooks/useGameEngine'
 import { getCurrentThrower } from '../utils/gameLogic'
@@ -6,6 +6,7 @@ import { useGames } from '../hooks/useFirestore'
 import Scoreboard from './Scoreboard'
 import ScoringButtons from './ScoringButtons'
 import ConfettiEffect from './ConfettiEffect'
+import QRCode from 'qrcode'
 
 export default function LiveGame() {
   const location = useLocation()
@@ -23,7 +24,18 @@ export default function LiveGame() {
   )
 
   const [codeCopied, setCodeCopied] = useState(false)
+  const [showQr, setShowQr] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState(null)
   const isRoomCodeGame = gameId?.length === 4
+
+  useEffect(() => {
+    if (isRoomCodeGame && gameId) {
+      const joinUrl = `https://blb-ryan.github.io/kanjam/#/join/${gameId}`
+      QRCode.toDataURL(joinUrl, { width: 200, margin: 1, color: { dark: '#ff6b1a', light: '#1e2330' } })
+        .then(setQrDataUrl)
+        .catch(() => {})
+    }
+  }, [gameId, isRoomCodeGame])
 
   const handleCopyCode = () => {
     navigator.clipboard?.writeText(gameId).then(() => {
@@ -63,7 +75,20 @@ export default function LiveGame() {
       saveGame({ ...gameState, id: gameId })
       setConfetti(true)
       const t = setTimeout(() => {
-        navigate('/game-over', { state: { gameState, gameId } })
+        navigate('/game-over', {
+          state: {
+            gameState,
+            gameId,
+            // Pass tournament context through if present
+            returnTo: initData?.returnTo,
+            tournamentState: initData?.tournamentState,
+            tournamentRound: initData?.tournamentRound,
+            tournamentMatchupIndex: initData?.tournamentMatchupIndex,
+            tournamentSide: initData?.tournamentSide,
+            tournamentMatchupId: initData?.tournamentMatchupId,
+            tournamentIsGrandFinal: initData?.tournamentIsGrandFinal,
+          },
+        })
       }, gameState.winType === 'instant_win' ? 2200 : 1400)
       return () => clearTimeout(t)
     }
@@ -117,34 +142,62 @@ export default function LiveGame() {
 
       {/* Game code badge */}
       {isRoomCodeGame && (
-        <button
-          onClick={handleCopyCode}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            background: 'var(--color-bg-elevated)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 'var(--radius-md)',
-            padding: '10px 16px',
-            cursor: 'pointer',
-            transition: 'border-color 0.2s',
-            borderColor: codeCopied ? 'var(--color-orange)' : 'rgba(255,255,255,0.1)',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '0.65rem', color: 'var(--color-text-dim)', letterSpacing: '0.15em', fontFamily: 'var(--font-display)' }}>
-              GAME CODE
+        <div style={{
+          background: 'var(--color-bg-elevated)',
+          border: `1px solid ${codeCopied ? 'var(--color-orange)' : 'rgba(255,255,255,0.1)'}`,
+          borderRadius: 'var(--radius-md)',
+          overflow: 'hidden',
+          transition: 'border-color 0.2s',
+        }}>
+          <button
+            onClick={handleCopyCode}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              width: '100%',
+              padding: '10px 16px',
+              cursor: 'pointer',
+              background: 'none',
+              border: 'none',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--color-text-dim)', letterSpacing: '0.15em', fontFamily: 'var(--font-display)' }}>
+                GAME CODE
+              </div>
+              <div style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)', letterSpacing: '0.3em', color: 'var(--color-orange)' }}>
+                {gameId}
+              </div>
             </div>
-            <div style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)', letterSpacing: '0.3em', color: 'var(--color-orange)' }}>
-              {gameId}
+            <div style={{ marginLeft: 'auto', fontSize: '0.75rem', color: codeCopied ? 'var(--color-orange)' : 'var(--color-text-dim)' }}>
+              {codeCopied ? '✓ Copied!' : 'Tap to copy'}
             </div>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: codeCopied ? 'var(--color-orange)' : 'var(--color-text-dim)' }}>
-            {codeCopied ? '✓ Copied!' : 'Tap to copy'}
-          </div>
-        </button>
+            {qrDataUrl && (
+              <button
+                onClick={e => { e.stopPropagation(); setShowQr(v => !v) }}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 8,
+                  color: 'var(--color-text-muted)',
+                  fontSize: '1rem',
+                  padding: '4px 8px',
+                  cursor: 'pointer',
+                }}
+              >
+                {showQr ? '✕' : '📷'}
+              </button>
+            )}
+          </button>
+          {showQr && qrDataUrl && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '0 16px 14px' }}>
+              <img src={qrDataUrl} alt="QR code to join game" style={{ width: 160, height: 160, borderRadius: 8 }} />
+              <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Scan to join on another phone</div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Turn indicator */}
