@@ -30,7 +30,7 @@ export default function LiveGame() {
 
   useEffect(() => {
     if (isRoomCodeGame) {
-      const joinUrl = `https://blb-ryan.github.io/kanjam/#/join/${gameId}`
+      const joinUrl = `https://blb-ryan.github.io/kanjam/#/join?code=${gameId}`
       QRCode.toDataURL(joinUrl, { width: 200, margin: 1, color: { dark: '#ff6b1a', light: '#1e2330' } })
         .then(setQrDataUrl)
         .catch(() => {})
@@ -38,7 +38,7 @@ export default function LiveGame() {
   }, [gameId])
 
   const handleCopyCode = () => {
-    navigator.clipboard?.writeText(gameId).then(() => {
+    navigator.clipboard?.writeText(gameId)?.then(() => {
       setCodeCopied(true)
       setTimeout(() => setCodeCopied(false), 1500)
     })

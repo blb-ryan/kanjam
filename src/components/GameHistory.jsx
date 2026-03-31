@@ -12,6 +12,7 @@ export default function GameHistory() {
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
 
   const filtered = games.filter(g => {
     if (!search.trim()) return true
@@ -23,9 +24,15 @@ export default function GameHistory() {
   })
 
   const handleDelete = async (id) => {
-    await deleteGame(id)
-    setConfirmDelete(null)
-    if (expanded === id) setExpanded(null)
+    try {
+      await deleteGame(id)
+      setConfirmDelete(null)
+      setDeleteError('')
+      if (expanded === id) setExpanded(null)
+    } catch {
+      setDeleteError('Delete failed. Try again.')
+      setConfirmDelete(null)
+    }
   }
 
   return (
@@ -56,6 +63,9 @@ export default function GameHistory() {
       />
 
       {loading && <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: 24 }}>Loading...</p>}
+      {deleteError && (
+        <p style={{ color: 'var(--color-danger)', textAlign: 'center', fontSize: '0.85rem', marginBottom: 8 }}>{deleteError}</p>
+      )}
 
       {!loading && filtered.length === 0 && (
         <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: 24 }}>

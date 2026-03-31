@@ -1,14 +1,35 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../utils/firebase'
 import { VALID_CHARS } from '../utils/roomCode'
 
 export default function JoinGame() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Auto-fill + auto-join from QR scan (?code=XXXX)
+  useEffect(() => {
+    const qrCode = searchParams.get('code')?.toUpperCase().slice(0, 4) || ''
+    if (qrCode.length === 4 && [...qrCode].every(c => VALID_CHARS.has(c))) {
+      setCode(qrCode)
+      // Small delay so user sees the code before auto-joining
+      const t = setTimeout(() => {
+        setLoading(true)
+        setError('')
+        getDoc(doc(db, 'games', qrCode)).then(snap => {
+          if (!snap.exists()) { setError('Game not found.'); setLoading(false); return }
+          const gameData = snap.data()
+          if (gameData.status !== 'active') { setError('That game has already ended.'); setLoading(false); return }
+          navigate('/game', { state: gameData })
+        }).catch(() => { setError('Something went wrong. Try again.'); setLoading(false) })
+      }, 600)
+      return () => clearTimeout(t)
+    }
+  }, [])
 
   const handleInput = (e) => {
     const val = e.target.value

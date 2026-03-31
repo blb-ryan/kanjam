@@ -84,15 +84,13 @@ export default function TournamentSetup() {
     if (teams.length < 3) return
     setStarting(true)
 
-    const seededTeams = seedByWinRate ? teams : teams
-
     let bracket
     if (format === 'single_elimination') {
-      bracket = generateSingleEliminationBracket(seededTeams)
+      bracket = generateSingleEliminationBracket(teams)
     } else if (format === 'double_elimination') {
-      bracket = generateDoubleEliminationBracket(seededTeams)
+      bracket = generateDoubleEliminationBracket(teams)
     } else {
-      bracket = generateRoundRobin(seededTeams)
+      bracket = generateRoundRobin(teams)
     }
 
     const id = crypto.randomUUID()
@@ -100,8 +98,8 @@ export default function TournamentSetup() {
       id,
       name: name.trim() || `Tournament ${new Date().toLocaleDateString()}`,
       format,
-      teamIds: seededTeams.map(t => t.id),
-      teams: seededTeams,
+      teamIds: teams.map(t => t.id),
+      teams,
       bracket,
       championId: null,
       createdAt: new Date().toISOString(),

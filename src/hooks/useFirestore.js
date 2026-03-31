@@ -11,10 +11,10 @@ export function usePlayers() {
 
   useEffect(() => {
     const q = query(collection(db, 'players'), orderBy('name'))
-    const unsub = onSnapshot(q, (snap) => {
-      setPlayers(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-      setLoading(false)
-    })
+    const unsub = onSnapshot(q,
+      (snap) => { setPlayers(snap.docs.map(d => ({ id: d.id, ...d.data() })));  setLoading(false) },
+      () => setLoading(false),
+    )
     return unsub
   }, [])
 
@@ -60,10 +60,10 @@ export function useGames() {
 
   useEffect(() => {
     const q = query(collection(db, 'games'), orderBy('createdAt', 'desc'))
-    const unsub = onSnapshot(q, (snap) => {
-      setGames(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-      setLoading(false)
-    })
+    const unsub = onSnapshot(q,
+      (snap) => { setGames(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false) },
+      () => setLoading(false),
+    )
     return unsub
   }, [])
 

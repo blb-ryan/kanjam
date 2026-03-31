@@ -58,7 +58,9 @@ export default function TournamentBracket() {
     }
 
     setTournament(updatedTournament)
-    saveTournament(updatedTournament)
+    saveTournament(updatedTournament).catch(() => {
+      // Non-fatal: UI is updated, next save attempt will retry
+    })
 
     if (champion) {
       setConfetti(true)
