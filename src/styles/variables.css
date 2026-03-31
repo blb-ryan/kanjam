@@ -1,0 +1,41 @@
+:root {
+  /* Brand palette */
+  --color-bg: #0d0f14;
+  --color-bg-card: #181c25;
+  --color-bg-elevated: #1e2330;
+
+  --color-orange: #ff6b1a;
+  --color-orange-dark: #cc4e00;
+  --color-blue: #1a8cff;
+  --color-blue-dark: #0066cc;
+  --color-yellow: #ffd600;
+  --color-lime: #a3e635;
+  --color-navy: #0a1628;
+
+  --color-team1: #ff6b1a;
+  --color-team1-glow: rgba(255,107,26,0.35);
+  --color-team2: #1a8cff;
+  --color-team2-glow: rgba(26,140,255,0.35);
+
+  --color-text: #f0f2f7;
+  --color-text-muted: #6b7280;
+  --color-text-dim: #3a3f4b;
+
+  --color-success: #a3e635;
+  --color-danger: #ff3b3b;
+  --color-gold: #ffd600;
+
+  /* Typography */
+  --font-display: 'Bungee', sans-serif;
+  --font-body: 'Inter', sans-serif;
+
+  /* Spacing */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  /* Shadows */
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.4);
+  --shadow-btn: 0 4px 12px rgba(0,0,0,0.4);
+}

@@ -1,0 +1,85 @@
+/* Score pop */
+@keyframes scorePop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.35); color: var(--color-yellow); }
+  100% { transform: scale(1); }
+}
+
+/* Bust shake */
+@keyframes bustShake {
+  0%, 100% { transform: translateX(0); }
+  15%       { transform: translateX(-12px) rotate(-2deg); }
+  30%       { transform: translateX(12px) rotate(2deg); }
+  45%       { transform: translateX(-8px); }
+  60%       { transform: translateX(8px); }
+  75%       { transform: translateX(-4px); }
+}
+
+/* Bust flash */
+@keyframes bustFlash {
+  0%, 100% { background-color: transparent; }
+  20%, 60% { background-color: rgba(255,59,59,0.25); }
+}
+
+/* Instant win flash */
+@keyframes instantWinFlash {
+  0%   { background-color: transparent; }
+  20%  { background-color: rgba(255,214,0,0.4); }
+  40%  { background-color: transparent; }
+  60%  { background-color: rgba(255,214,0,0.4); }
+  80%  { background-color: transparent; }
+  100% { background-color: rgba(255,214,0,0.15); }
+}
+
+/* Confetti burst */
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+/* Pulse glow */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 12px var(--glow-color, rgba(255,107,26,0.4)); }
+  50%       { box-shadow: 0 0 32px var(--glow-color, rgba(255,107,26,0.7)); }
+}
+
+/* Slide up */
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+/* Bounce in */
+@keyframes bounceIn {
+  0%   { transform: scale(0.5); opacity: 0; }
+  70%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* Spin in */
+@keyframes spinIn {
+  from { transform: rotate(-180deg) scale(0.5); opacity: 0; }
+  to   { transform: rotate(0deg) scale(1); opacity: 1; }
+}
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Number count up flash */
+@keyframes numFlash {
+  0%   { color: var(--color-yellow); transform: scale(1.2); }
+  100% { color: inherit; transform: scale(1); }
+}
+
+.animate-score-pop    { animation: scorePop 0.45s cubic-bezier(.36,.07,.19,.97); }
+.animate-bust-shake   { animation: bustShake 0.5s ease; }
+.animate-bust-flash   { animation: bustFlash 0.5s ease; }
+.animate-instant-win  { animation: instantWinFlash 0.8s ease forwards; }
+.animate-slide-up     { animation: slideUp 0.3s ease forwards; }
+.animate-bounce-in    { animation: bounceIn 0.5s cubic-bezier(.36,.07,.19,.97) forwards; }
+.animate-spin-in      { animation: spinIn 0.4s ease forwards; }
+.animate-fade-in      { animation: fadeIn 0.3s ease forwards; }
+.animate-num-flash    { animation: numFlash 0.4s ease forwards; }
