@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import ConfettiEffect from './ConfettiEffect'
 import { clearStoredActiveGame } from '../hooks/useGameEngine'
@@ -30,6 +30,10 @@ export default function GameOver() {
   const [sharing, setSharing] = useState(false)
   const [rematching, setRematching] = useState(false)
 
+  useEffect(() => {
+    clearStoredActiveGame()
+  }, [])
+
   if (!gameState) {
     return (
       <div className="screen" style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -40,8 +44,6 @@ export default function GameOver() {
       </div>
     )
   }
-
-  clearStoredActiveGame()
 
   const { team1, team2, team1Score, team2Score, winnerId, winType, rounds, isOvertime } = gameState
   const winningTeam = winnerId === team1?.id ? team1 : team2

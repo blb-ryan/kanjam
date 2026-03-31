@@ -29,13 +29,13 @@ export default function LiveGame() {
   const isRoomCodeGame = gameId?.length === 4
 
   useEffect(() => {
-    if (isRoomCodeGame && gameId) {
+    if (isRoomCodeGame) {
       const joinUrl = `https://blb-ryan.github.io/kanjam/#/join/${gameId}`
       QRCode.toDataURL(joinUrl, { width: 200, margin: 1, color: { dark: '#ff6b1a', light: '#1e2330' } })
         .then(setQrDataUrl)
         .catch(() => {})
     }
-  }, [gameId, isRoomCodeGame])
+  }, [gameId])
 
   const handleCopyCode = () => {
     navigator.clipboard?.writeText(gameId).then(() => {

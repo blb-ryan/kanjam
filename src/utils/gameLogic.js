@@ -264,6 +264,9 @@ export function undoLastThrow(gameState) {
 export function calculatePlayerStats(games, players) {
   const stats = {}
 
+  // Track win/loss sequence separately so it stays off the public stat object
+  const gameResults = {} // playerId -> boolean[]
+
   for (const player of players) {
     stats[player.id] = {
       playerId: player.id,
@@ -275,19 +278,17 @@ export function calculatePlayerStats(games, players) {
       instantWins: 0,
       busts: 0,
       throws: 0,
-      overtimeWins: 0,         // clutch: won a game that went to OT
+      overtimeWins: 0,
       throwBreakdown: { miss: 0, dinger: 0, deuce: 0, bucket: 0, instant_win: 0 },
-      // For streak calculation — sorted list of W/L results
-      _results: [],            // [{ won: bool, completedAt: string }]
     }
+    gameResults[player.id] = []
   }
 
   // Sort games by completedAt so streaks are chronological
-  const sortedGames = [...games].sort((a, b) => {
-    const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0
-    const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0
-    return aTime - bTime
-  })
+  const sortedGames = [...games]
+    .map(g => ({ g, t: g.completedAt ? new Date(g.completedAt).getTime() : 0 }))
+    .sort((a, b) => a.t - b.t)
+    .map(x => x.g)
 
   for (const game of sortedGames) {
     const allThrows = []
@@ -296,16 +297,21 @@ export function calculatePlayerStats(games, players) {
       if (round.team2Throw) allThrows.push({ ...round.team2Throw, teamId: game.team2?.id })
     }
 
+    // Build player→team map once to avoid O(n²) find later
+    const playerToTeamId = {}
     const playersInGame = new Set()
     for (const t of allThrows) {
-      if (t.throwerPlayerId) playersInGame.add(t.throwerPlayerId)
+      if (t.throwerPlayerId) {
+        playersInGame.add(t.throwerPlayerId)
+        playerToTeamId[t.throwerPlayerId] = t.teamId
+      }
     }
 
     for (const pid of playersInGame) {
       if (!stats[pid]) continue
       stats[pid].gamesPlayed++
 
-      const playerTeamId = allThrows.find(t => t.throwerPlayerId === pid)?.teamId
+      const playerTeamId = playerToTeamId[pid]
       const won = game.winnerId === playerTeamId
       if (won) {
         stats[pid].wins++
@@ -314,7 +320,7 @@ export function calculatePlayerStats(games, players) {
         stats[pid].losses++
       }
 
-      stats[pid]._results.push({ won, completedAt: game.completedAt || '' })
+      if (gameResults[pid]) gameResults[pid].push(won)
     }
 
     for (const t of allThrows) {
@@ -328,15 +334,15 @@ export function calculatePlayerStats(games, players) {
     }
   }
 
-  // Compute streaks from _results (already chronological)
+  // Compute streaks from gameResults (already chronological)
   for (const s of Object.values(stats)) {
-    const results = s._results
+    const results = gameResults[s.playerId] || []
     let currentStreak = 0
     let longestStreak = 0
     let currentStreakType = null
 
     for (let i = results.length - 1; i >= 0; i--) {
-      const won = results[i].won
+      const won = results[i]
       if (i === results.length - 1) {
         currentStreakType = won
         currentStreak = 1
@@ -349,18 +355,16 @@ export function calculatePlayerStats(games, players) {
 
     let runStreak = 0
     let runType = null
-    for (const r of results) {
-      if (runType === null) { runType = r.won; runStreak = 1 }
-      else if (r.won === runType) { runStreak++ }
-      else { runType = r.won; runStreak = 1 }
-      if (r.won && runStreak > longestStreak) longestStreak = runStreak
+    for (const won of results) {
+      if (runType === null) { runType = won; runStreak = 1 }
+      else if (won === runType) { runStreak++ }
+      else { runType = won; runStreak = 1 }
+      if (won && runStreak > longestStreak) longestStreak = runStreak
     }
 
     s.currentStreak = currentStreak
     s.currentStreakWin = currentStreakType === true
     s.longestWinStreak = longestStreak
-
-    delete s._results
   }
 
   return Object.values(stats)
@@ -368,8 +372,6 @@ export function calculatePlayerStats(games, players) {
 
 // Head-to-head record between two sets of playerIds
 export function calculateHeadToHead(games, playerIds1, playerIds2) {
-  const set1 = new Set(playerIds1)
-  const set2 = new Set(playerIds2)
   let wins = 0, losses = 0
 
   for (const game of games) {

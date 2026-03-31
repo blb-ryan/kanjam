@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlayers, useGames } from '../hooks/useFirestore'
 import { calculatePlayerStats, calculateHeadToHead } from '../utils/gameLogic'
@@ -33,15 +33,17 @@ export default function PlayerStats() {
 
   const loading = playersLoading || gamesLoading
 
-  const rawStats = loading ? [] : calculatePlayerStats(games, players)
-  const stats = rawStats.map(s => ({
-    ...s,
-    winPct: s.gamesPlayed > 0 ? Math.round((s.wins / s.gamesPlayed) * 100) : 0,
-    ptsPerGame: s.gamesPlayed > 0 ? (s.totalPoints / s.gamesPlayed).toFixed(1) : '0.0',
-  })).sort((a, b) => {
-    if (sortKey === 'busts') return b.busts - a.busts
-    return (b[sortKey] || 0) - (a[sortKey] || 0)
-  })
+  const stats = useMemo(() => {
+    if (loading) return []
+    return calculatePlayerStats(games, players).map(s => ({
+      ...s,
+      winPct: s.gamesPlayed > 0 ? Math.round((s.wins / s.gamesPlayed) * 100) : 0,
+      ptsPerGame: s.gamesPlayed > 0 ? (s.totalPoints / s.gamesPlayed).toFixed(1) : '0.0',
+    })).sort((a, b) => {
+      if (sortKey === 'busts') return b.busts - a.busts
+      return (b[sortKey] || 0) - (a[sortKey] || 0)
+    })
+  }, [games, players, loading, sortKey])
 
   if (selectedPlayer) {
     const s = stats.find(x => x.playerId === selectedPlayer)

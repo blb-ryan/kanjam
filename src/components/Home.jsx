@@ -24,15 +24,6 @@ export default function Home() {
     setPrefs({ theme: isSunMode ? 'sun' : 'dark' })
   }, [isSunMode])
 
-  // Apply saved theme on mount
-  useEffect(() => {
-    const saved = getPrefs().theme
-    if (saved === 'sun') {
-      setIsSunMode(true)
-      document.documentElement.setAttribute('data-theme', 'sun')
-    }
-  }, [])
-
   return (
     <div className="screen" style={{ justifyContent: 'space-between', padding: '20px 16px' }}>
       {/* Header */}

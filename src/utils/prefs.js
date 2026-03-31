@@ -25,5 +25,7 @@ export function setPrefs(update) {
 
 export function togglePref(key) {
   const current = getPrefs()
-  return setPrefs({ [key]: !current[key] })
+  const next = { ...current, [key]: !current[key] }
+  localStorage.setItem(PREFS_KEY, JSON.stringify(next))
+  return next
 }
