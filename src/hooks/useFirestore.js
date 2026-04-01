@@ -6,6 +6,28 @@ import {
 import { db } from '../utils/firebase'
 import { createInitialGameState } from '../utils/gameLogic'
 
+// ─── Display helpers ──────────────────────────────────────────────────────────
+
+export function playerDisplayName(player) {
+  if (!player) return ''
+  if (player.firstName) {
+    return player.lastName
+      ? `${player.firstName} ${player.lastName[0]}.`
+      : player.firstName
+  }
+  return player.name || ''
+}
+
+export function playerFullName(player) {
+  if (!player) return ''
+  if (player.firstName) {
+    return player.lastName
+      ? `${player.firstName} ${player.lastName}`
+      : player.firstName
+  }
+  return player.name || ''
+}
+
 // ─── Lobby helpers (standalone, not hooks) ────────────────────────────────────
 
 export async function createLobby(roomCode, team1) {
@@ -28,23 +50,54 @@ export async function joinLobby(roomCode, team1, team2) {
   })
 }
 
+// ─── Player resolution ────────────────────────────────────────────────────────
+
+export async function resolvePlayer(nameText, existingPlayer) {
+  // If user picked from autocomplete, use that player's ID
+  if (existingPlayer) return existingPlayer.id
+
+  // Otherwise create a new player doc
+  const parts = nameText.trim().split(/\s+/)
+  const firstName = parts[0] || ''
+  const lastName = parts.slice(1).join(' ') || ''
+  const id = crypto.randomUUID()
+  await setDoc(doc(db, 'players', id), {
+    firstName,
+    lastName,
+    createdAt: new Date().toISOString(),
+  })
+  return id
+}
+
+// Build a display name from raw input text + selected player
+export function nameToDisplay(nameText, existingPlayer) {
+  if (existingPlayer) return playerDisplayName(existingPlayer)
+  const parts = nameText.trim().split(/\s+/)
+  const first = parts[0] || ''
+  const last = parts.slice(1).join(' ') || ''
+  return last ? `${first} ${last[0]}.` : first
+}
+
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+
 export function usePlayers() {
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const q = query(collection(db, 'players'), orderBy('name'))
+    const q = query(collection(db, 'players'), orderBy('firstName'))
     const unsub = onSnapshot(q,
-      (snap) => { setPlayers(snap.docs.map(d => ({ id: d.id, ...d.data() })));  setLoading(false) },
+      (snap) => { setPlayers(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false) },
       () => setLoading(false),
     )
     return unsub
   }, [])
 
-  const createPlayer = useCallback(async (name) => {
+  const createPlayer = useCallback(async (firstName, lastName = '') => {
     const id = crypto.randomUUID()
     await setDoc(doc(db, 'players', id), {
-      name: name.trim(),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
       createdAt: new Date().toISOString(),
     })
     return id

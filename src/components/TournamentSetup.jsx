@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { usePlayers, useTournaments, useGames } from '../hooks/useFirestore'
+import { usePlayers, useTournaments, useGames, playerDisplayName, playerFullName } from '../hooks/useFirestore'
 import {
   generateSingleEliminationBracket,
   generateDoubleEliminationBracket,
@@ -33,7 +33,7 @@ export default function TournamentSetup() {
 
   const filtered = useMemo(() => {
     if (!search.trim()) return players
-    return players.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
+    return players.filter(p => playerFullName(p).toLowerCase().includes(search.toLowerCase()))
   }, [players, search])
 
   const usedPlayerIds = teams.flatMap(t => t.playerIds)
@@ -47,7 +47,7 @@ export default function TournamentSetup() {
   }
 
   const autoTeamName = () =>
-    newTeamPlayers.map(id => players.find(p => p.id === id)?.name || '').filter(Boolean).join(' & ')
+    newTeamPlayers.map(id => { const p = players.find(x => x.id === id); return p ? playerDisplayName(p) : '' }).filter(Boolean).join(' + ')
 
   const handleConfirmTeam = () => {
     if (newTeamPlayers.length < 2) return
@@ -65,7 +65,10 @@ export default function TournamentSetup() {
 
   const handleAddNewPlayer = async () => {
     if (!newPlayerName.trim()) return
-    const id = await createPlayer(newPlayerName)
+    const parts = newPlayerName.trim().split(/\s+/)
+    const firstName = parts[0] || ''
+    const lastName = parts.slice(1).join(' ') || ''
+    const id = await createPlayer(firstName, lastName)
     setNewPlayerName('')
     if (newTeamPlayers.length < 2) setNewTeamPlayers([...newTeamPlayers, id])
   }
@@ -172,9 +175,9 @@ export default function TournamentSetup() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontFamily: 'var(--font-display)', color: sel ? '#fff' : 'var(--color-text-muted)',
                 }}>
-                  {p.name[0].toUpperCase()}
+                  {(p.firstName || p.name || '?')[0].toUpperCase()}
                 </div>
-                <span style={{ fontWeight: 600, color: sel ? 'var(--color-text)' : 'var(--color-text-muted)' }}>{p.name}</span>
+                <span style={{ fontWeight: 600, color: sel ? 'var(--color-text)' : 'var(--color-text-muted)' }}>{playerDisplayName(p)}</span>
                 {sel && <span style={{ marginLeft: 'auto', color: 'var(--color-blue)' }}>✓</span>}
               </button>
             )
@@ -263,7 +266,7 @@ export default function TournamentSetup() {
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700 }}>{t.name}</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                {t.playerIds.map(id => players.find(p => p.id === id)?.name || id).join(' & ')}
+                {t.playerIds.map(id => { const p = players.find(x => x.id === id); return p ? playerDisplayName(p) : id }).join(' + ')}
               </div>
             </div>
             <button

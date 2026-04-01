@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlayers, useGames } from '../hooks/useFirestore'
-import { calculatePlayerStats, calculateHeadToHead } from '../utils/gameLogic'
+import { calculatePlayerStats } from '../utils/gameLogic'
 
 const SORT_OPTIONS = [
   { key: 'gamesPlayed', label: 'Games' },

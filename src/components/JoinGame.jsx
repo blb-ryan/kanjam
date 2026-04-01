@@ -3,11 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../utils/firebase'
 import { VALID_CHARS } from '../utils/roomCode'
-import { joinLobby } from '../hooks/useFirestore'
+import { joinLobby, resolvePlayer, nameToDisplay, usePlayers } from '../hooks/useFirestore'
+import PlayerNameInput from './PlayerNameInput'
 
 export default function JoinGame() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { players } = usePlayers()
 
   // 'code' → entering room code | 'names' → entering Team 2 names
   const [step, setStep] = useState('code')
@@ -15,16 +17,18 @@ export default function JoinGame() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Stored when lobby is found, used when names are submitted
+  // Stored when lobby is found
   const [team1, setTeam1] = useState(null)
 
   // Team 2 name inputs
-  const [p1, setP1] = useState('')
-  const [p2, setP2] = useState('')
+  const [name1, setName1] = useState('')
+  const [selected1, setSelected1] = useState(null)
+  const [name2, setName2] = useState('')
+  const [selected2, setSelected2] = useState(null)
   const ref2 = useRef(null)
-  const canJoin = p1.trim() && p2.trim()
+  const canJoin = name1.trim() && name2.trim()
 
-  // Auto-fill + auto-lookup from QR scan (?code=XXXX)
+  // Auto-fill from QR scan (?code=XXXX)
   useEffect(() => {
     const qrCode = searchParams.get('code')?.toUpperCase().slice(0, 4) || ''
     if (qrCode.length === 4 && [...qrCode].every(c => VALID_CHARS.has(c))) {
@@ -56,12 +60,10 @@ export default function JoinGame() {
       }
       const data = snap.data()
       if (data.status === 'lobby') {
-        // Team 2 joins: show name entry
         setTeam1(data.team1)
         setStep('names')
         setLoading(false)
       } else if (data.status === 'active') {
-        // Game already running — join as scorekeeper/spectator
         navigate('/game', { state: data })
       } else {
         setError('That game has already ended.')
@@ -77,15 +79,19 @@ export default function JoinGame() {
     if (!canJoin || !team1) return
     setLoading(true)
     try {
-      const n1 = p1.trim(), n2 = p2.trim()
+      const [pid1, pid2] = await Promise.all([
+        resolvePlayer(name1, selected1),
+        resolvePlayer(name2, selected2),
+      ])
+      const d1 = nameToDisplay(name1, selected1)
+      const d2 = nameToDisplay(name2, selected2)
       const team2 = {
         id: crypto.randomUUID(),
-        name: `${n1} + ${n2}`,
-        playerIds: [crypto.randomUUID(), crypto.randomUUID()],
-        playerNames: [n1, n2],
+        name: `${d1} + ${d2}`,
+        playerIds: [pid1, pid2],
+        playerNames: [d1, d2],
       }
       await joinLobby(code, team1, team2)
-      // Navigate to game — host will also receive the Firestore update and navigate
       const snap = await getDoc(doc(db, 'games', code))
       navigate('/game', { state: snap.data() })
     } catch {
@@ -94,6 +100,11 @@ export default function JoinGame() {
     }
   }
 
+  const preview = name1.trim() && name2.trim()
+    ? `${nameToDisplay(name1, selected1)} + ${nameToDisplay(name2, selected2)}`
+    : null
+
+  // Step 2: Team 2 name entry
   if (step === 'names') {
     return (
       <div className="screen" style={{ padding: '20px 20px 32px', gap: 0 }}>
@@ -130,12 +141,13 @@ export default function JoinGame() {
           TEAM 2
         </div>
 
-        <NameInput
-          value={p1}
-          onChange={setP1}
-          placeholder="Player 1"
+        <PlayerNameInput
+          value={name1}
+          onChange={setName1}
+          onSelect={setSelected1}
+          players={players}
+          placeholder="First Last"
           color="var(--color-team2)"
-          onEnter={() => ref2.current?.focus()}
           autoFocus
         />
 
@@ -150,16 +162,17 @@ export default function JoinGame() {
           +
         </div>
 
-        <NameInput
+        <PlayerNameInput
           inputRef={ref2}
-          value={p2}
-          onChange={setP2}
-          placeholder="Player 2"
+          value={name2}
+          onChange={setName2}
+          onSelect={setSelected2}
+          players={players}
+          placeholder="First Last"
           color="var(--color-team2)"
-          onEnter={canJoin ? handleJoinNames : undefined}
         />
 
-        {p1.trim() && p2.trim() && (
+        {preview && (
           <div style={{
             marginTop: 10,
             textAlign: 'center',
@@ -174,7 +187,7 @@ export default function JoinGame() {
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}>
-            {p1.trim()} + {p2.trim()}
+            {preview}
           </div>
         )}
 
@@ -207,7 +220,7 @@ export default function JoinGame() {
     )
   }
 
-  // Step: code entry
+  // Step 1: Code entry
   return (
     <div className="screen" style={{ padding: '20px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 40 }}>
@@ -289,32 +302,5 @@ export default function JoinGame() {
         {loading ? 'FINDING GAME...' : 'NEXT →'}
       </button>
     </div>
-  )
-}
-
-function NameInput({ value, onChange, placeholder, color, onEnter, autoFocus, inputRef }) {
-  return (
-    <input
-      ref={inputRef}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      onKeyDown={e => e.key === 'Enter' && onEnter?.()}
-      placeholder={placeholder}
-      maxLength={16}
-      autoFocus={autoFocus}
-      style={{
-        width: '100%',
-        padding: '13px 14px',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--color-bg-elevated)',
-        border: `2px solid ${value.trim() ? `${color}88` : 'rgba(255,255,255,0.08)'}`,
-        color: 'var(--color-text)',
-        fontSize: '1rem',
-        fontWeight: 700,
-        textAlign: 'center',
-        transition: 'border-color 0.2s',
-        boxSizing: 'border-box',
-      }}
-    />
   )
 }

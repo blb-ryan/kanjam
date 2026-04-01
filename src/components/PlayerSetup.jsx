@@ -1,28 +1,38 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateUniqueRoomCode } from '../utils/roomCode'
-import { createLobby } from '../hooks/useFirestore'
+import { createLobby, resolvePlayer, nameToDisplay, usePlayers } from '../hooks/useFirestore'
+import PlayerNameInput from './PlayerNameInput'
 
 export default function PlayerSetup() {
   const navigate = useNavigate()
-  const [p1, setP1] = useState('')
-  const [p2, setP2] = useState('')
+  const { players } = usePlayers()
+
+  const [name1, setName1] = useState('')
+  const [selected1, setSelected1] = useState(null)
+  const [name2, setName2] = useState('')
+  const [selected2, setSelected2] = useState(null)
   const [creating, setCreating] = useState(false)
   const ref2 = useRef(null)
 
-  const canCreate = p1.trim() && p2.trim()
+  const canCreate = name1.trim() && name2.trim()
 
   const handleCreate = async () => {
     if (!canCreate) return
     setCreating(true)
     try {
       const roomCode = await generateUniqueRoomCode()
-      const n1 = p1.trim(), n2 = p2.trim()
+      const [pid1, pid2] = await Promise.all([
+        resolvePlayer(name1, selected1),
+        resolvePlayer(name2, selected2),
+      ])
+      const d1 = nameToDisplay(name1, selected1)
+      const d2 = nameToDisplay(name2, selected2)
       const team1 = {
         id: crypto.randomUUID(),
-        name: `${n1} + ${n2}`,
-        playerIds: [crypto.randomUUID(), crypto.randomUUID()],
-        playerNames: [n1, n2],
+        name: `${d1} + ${d2}`,
+        playerIds: [pid1, pid2],
+        playerNames: [d1, d2],
       }
       await createLobby(roomCode, team1)
       navigate('/lobby', { state: { roomCode, team1 } })
@@ -30,6 +40,10 @@ export default function PlayerSetup() {
       setCreating(false)
     }
   }
+
+  const preview = name1.trim() && name2.trim()
+    ? `${nameToDisplay(name1, selected1)} + ${nameToDisplay(name2, selected2)}`
+    : null
 
   return (
     <div className="screen" style={{ padding: '20px 20px 32px', gap: 0 }}>
@@ -64,12 +78,13 @@ export default function PlayerSetup() {
         TEAM 1
       </div>
 
-      <NameInput
-        value={p1}
-        onChange={setP1}
-        placeholder="Player 1"
+      <PlayerNameInput
+        value={name1}
+        onChange={setName1}
+        onSelect={setSelected1}
+        players={players}
+        placeholder="First Last"
         color="var(--color-team1)"
-        onEnter={() => ref2.current?.focus()}
         autoFocus
       />
 
@@ -84,16 +99,17 @@ export default function PlayerSetup() {
         +
       </div>
 
-      <NameInput
+      <PlayerNameInput
         inputRef={ref2}
-        value={p2}
-        onChange={setP2}
-        placeholder="Player 2"
+        value={name2}
+        onChange={setName2}
+        onSelect={setSelected2}
+        players={players}
+        placeholder="First Last"
         color="var(--color-team1)"
-        onEnter={canCreate ? handleCreate : undefined}
       />
 
-      {p1.trim() && p2.trim() && (
+      {preview && (
         <div style={{
           marginTop: 10,
           textAlign: 'center',
@@ -108,7 +124,7 @@ export default function PlayerSetup() {
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
         }}>
-          {p1.trim()} + {p2.trim()}
+          {preview}
         </div>
       )}
 
@@ -132,32 +148,5 @@ export default function PlayerSetup() {
         {creating ? 'CREATING...' : '🥏 CREATE GAME'}
       </button>
     </div>
-  )
-}
-
-function NameInput({ value, onChange, placeholder, color, onEnter, autoFocus, inputRef }) {
-  return (
-    <input
-      ref={inputRef}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      onKeyDown={e => e.key === 'Enter' && onEnter?.()}
-      placeholder={placeholder}
-      maxLength={16}
-      autoFocus={autoFocus}
-      style={{
-        width: '100%',
-        padding: '13px 14px',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--color-bg-elevated)',
-        border: `2px solid ${value.trim() ? `${color}88` : 'rgba(255,255,255,0.08)'}`,
-        color: 'var(--color-text)',
-        fontSize: '1rem',
-        fontWeight: 700,
-        textAlign: 'center',
-        transition: 'border-color 0.2s',
-        boxSizing: 'border-box',
-      }}
-    />
   )
 }

@@ -266,9 +266,13 @@ export function calculatePlayerStats(games, players) {
   const gameResults = {} // playerId -> boolean[]
 
   for (const player of players) {
+    // Support both old (name) and new (firstName/lastName) schemas
+    const displayName = player.firstName
+      ? (player.lastName ? `${player.firstName} ${player.lastName[0]}.` : player.firstName)
+      : (player.name || 'Player')
     stats[player.id] = {
       playerId: player.id,
-      name: player.name,
+      name: displayName,
       gamesPlayed: 0,
       wins: 0,
       losses: 0,
