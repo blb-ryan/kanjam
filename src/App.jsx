@@ -9,6 +9,7 @@ import TournamentSetup from './components/TournamentSetup'
 import TournamentBracket from './components/TournamentBracket'
 import JoinGame from './components/JoinGame'
 import LobbyWait from './components/LobbyWait'
+import TournamentLobby from './components/TournamentLobby'
 import './styles/global.css'
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/tournament" element={<TournamentBracket />} />
         <Route path="/join" element={<JoinGame />} />
         <Route path="/lobby" element={<LobbyWait />} />
+        <Route path="/tournament-lobby" element={<TournamentLobby />} />
       </Routes>
     </HashRouter>
   )

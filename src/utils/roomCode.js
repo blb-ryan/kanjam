@@ -14,8 +14,11 @@ export function generateRoomCode() {
 export async function generateUniqueRoomCode() {
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = generateRoomCode()
-    const snap = await getDoc(doc(db, 'games', code))
-    if (!snap.exists()) return code
+    const [gameSnap, tournSnap] = await Promise.all([
+      getDoc(doc(db, 'games', code)),
+      getDoc(doc(db, 'tournaments', code)),
+    ])
+    if (!gameSnap.exists() && !tournSnap.exists()) return code
   }
   throw new Error('Could not generate a unique room code after 10 attempts')
 }

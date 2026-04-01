@@ -1,12 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { usePlayers, useTournaments, useGames, playerDisplayName, playerFullName } from '../hooks/useFirestore'
-import {
-  generateSingleEliminationBracket,
-  generateDoubleEliminationBracket,
-  generateRoundRobin,
-  seedTeamsByWinRate,
-} from '../utils/bracketLogic'
+import { usePlayers, createTournamentLobby, resolvePlayer, nameToDisplay } from '../hooks/useFirestore'
+import { generateUniqueRoomCode } from '../utils/roomCode'
+import PlayerNameInput from './PlayerNameInput'
 
 const FORMATS = [
   { key: 'single_elimination', label: 'Single Elim', desc: 'One loss and you\'re out' },
@@ -16,288 +12,215 @@ const FORMATS = [
 
 export default function TournamentSetup() {
   const navigate = useNavigate()
-  const { players, loading, createPlayer } = usePlayers()
-  const { saveTournament } = useTournaments()
-  const { games } = useGames()
+  const { players } = usePlayers()
 
-  const [name, setName] = useState('')
+  const [tournamentName, setTournamentName] = useState('')
   const [format, setFormat] = useState('single_elimination')
-  const [teams, setTeams] = useState([])
-  const [step, setStep] = useState('config')
-  const [newTeamPlayers, setNewTeamPlayers] = useState([])
-  const [newTeamName, setNewTeamName] = useState('')
-  const [search, setSearch] = useState('')
-  const [newPlayerName, setNewPlayerName] = useState('')
-  const [starting, setStarting] = useState(false)
-  const [seedByWinRate, setSeedByWinRate] = useState(false)
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return players
-    return players.filter(p => playerFullName(p).toLowerCase().includes(search.toLowerCase()))
-  }, [players, search])
+  // Host team (Team 1)
+  const [name1, setName1] = useState('')
+  const [selected1, setSelected1] = useState(null)
+  const [name2, setName2] = useState('')
+  const [selected2, setSelected2] = useState(null)
 
-  const usedPlayerIds = teams.flatMap(t => t.playerIds)
+  const [creating, setCreating] = useState(false)
 
-  const handleAddPlayerToNewTeam = (playerId) => {
-    if (newTeamPlayers.includes(playerId)) {
-      setNewTeamPlayers(newTeamPlayers.filter(id => id !== playerId))
-    } else if (newTeamPlayers.length < 2) {
-      setNewTeamPlayers([...newTeamPlayers, playerId])
+  const canCreate = name1.trim() && name2.trim()
+
+  const handleCreate = async () => {
+    if (!canCreate) return
+    setCreating(true)
+    try {
+      const roomCode = await generateUniqueRoomCode()
+      const [pid1, pid2] = await Promise.all([
+        resolvePlayer(name1, selected1),
+        resolvePlayer(name2, selected2),
+      ])
+      const d1 = nameToDisplay(name1, selected1)
+      const d2 = nameToDisplay(name2, selected2)
+      const hostTeam = {
+        id: crypto.randomUUID(),
+        name: `${d1} + ${d2}`,
+        playerIds: [pid1, pid2],
+        playerNames: [d1, d2],
+      }
+      const name = tournamentName.trim() || `Tournament ${new Date().toLocaleDateString()}`
+      await createTournamentLobby(roomCode, name, format, hostTeam)
+      navigate('/tournament-lobby', { state: { roomCode, isHost: true } })
+    } catch {
+      setCreating(false)
     }
   }
 
-  const autoTeamName = () =>
-    newTeamPlayers.map(id => { const p = players.find(x => x.id === id); return p ? playerDisplayName(p) : '' }).filter(Boolean).join(' + ')
-
-  const handleConfirmTeam = () => {
-    if (newTeamPlayers.length < 2) return
-    const team = {
-      id: crypto.randomUUID(),
-      name: newTeamName.trim() || autoTeamName(),
-      playerIds: newTeamPlayers,
-    }
-    setTeams([...teams, team])
-    setNewTeamPlayers([])
-    setNewTeamName('')
-    setSearch('')
-    setStep('config')
-  }
-
-  const handleAddNewPlayer = async () => {
-    if (!newPlayerName.trim()) return
-    const parts = newPlayerName.trim().split(/\s+/)
-    const firstName = parts[0] || ''
-    const lastName = parts.slice(1).join(' ') || ''
-    const id = await createPlayer(firstName, lastName)
-    setNewPlayerName('')
-    if (newTeamPlayers.length < 2) setNewTeamPlayers([...newTeamPlayers, id])
-  }
-
-  const handleShuffle = () => {
-    setTeams(t => [...t].sort(() => Math.random() - 0.5))
-  }
-
-  const handleSeedByWinRate = () => {
-    const seeded = seedTeamsByWinRate(teams, games)
-    setTeams(seeded)
-    setSeedByWinRate(true)
-  }
-
-  const handleStart = async () => {
-    if (teams.length < 3) return
-    setStarting(true)
-
-    let bracket
-    if (format === 'single_elimination') {
-      bracket = generateSingleEliminationBracket(teams)
-    } else if (format === 'double_elimination') {
-      bracket = generateDoubleEliminationBracket(teams)
-    } else {
-      bracket = generateRoundRobin(teams)
-    }
-
-    const id = crypto.randomUUID()
-    const tournamentData = {
-      id,
-      name: name.trim() || `Tournament ${new Date().toLocaleDateString()}`,
-      format,
-      teamIds: teams.map(t => t.id),
-      teams,
-      bracket,
-      championId: null,
-      createdAt: new Date().toISOString(),
-      completedAt: null,
-    }
-    await saveTournament(tournamentData)
-    setStarting(false)
-    navigate('/tournament', { state: { tournament: tournamentData } })
-  }
-
-  if (step === 'add-team') {
-    return (
-      <div className="screen">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <button className="btn btn-ghost" onClick={() => { setStep('config'); setNewTeamPlayers([]); setNewTeamName('') }} style={{ padding: '8px 4px', minHeight: 0 }}>
-            ← Back
-          </button>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--color-blue)', letterSpacing: '0.05em' }}>
-            ADD TEAM ({newTeamPlayers.length}/2)
-          </h2>
-        </div>
-
-        <input
-          value={newTeamName}
-          onChange={e => setNewTeamName(e.target.value)}
-          placeholder={`Team name (default: "${autoTeamName() || 'Team Name'}")`}
-          style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--color-text)', fontSize: '1rem', marginBottom: 12 }}
-        />
-
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search players..."
-            style={{ flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--color-text)', fontSize: '1rem' }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-          <input
-            value={newPlayerName}
-            onChange={e => setNewPlayerName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddNewPlayer()}
-            placeholder="Add new player..."
-            style={{ flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--color-text)', fontSize: '1rem' }}
-          />
-          <button className="btn btn-primary" onClick={handleAddNewPlayer} disabled={!newPlayerName.trim()} style={{ padding: '10px 16px', minHeight: 0 }}>
-            + Add
-          </button>
-        </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-          {filtered.filter(p => !usedPlayerIds.includes(p.id)).map(p => {
-            const sel = newTeamPlayers.includes(p.id)
-            return (
-              <button
-                key={p.id}
-                onClick={() => handleAddPlayerToNewTeam(p.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-                  borderRadius: 'var(--radius-md)',
-                  background: sel ? 'var(--color-blue)22' : 'var(--color-bg-elevated)',
-                  border: `2px solid ${sel ? 'var(--color-blue)' : 'transparent'}`,
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{
-                  width: 36, height: 36, borderRadius: '50%',
-                  background: sel ? 'var(--color-blue)' : 'var(--color-bg-card)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'var(--font-display)', color: sel ? '#fff' : 'var(--color-text-muted)',
-                }}>
-                  {(p.firstName || p.name || '?')[0].toUpperCase()}
-                </div>
-                <span style={{ fontWeight: 600, color: sel ? 'var(--color-text)' : 'var(--color-text-muted)' }}>{playerDisplayName(p)}</span>
-                {sel && <span style={{ marginLeft: 'auto', color: 'var(--color-blue)' }}>✓</span>}
-              </button>
-            )
-          })}
-        </div>
-
-        <button
-          className="btn btn-primary"
-          onClick={handleConfirmTeam}
-          disabled={newTeamPlayers.length < 2}
-          style={{ width: '100%', fontFamily: 'var(--font-display)', letterSpacing: '0.08em' }}
-        >
-          ADD TEAM
-        </button>
-      </div>
-    )
-  }
+  const preview = name1.trim() && name2.trim()
+    ? `${nameToDisplay(name1, selected1)} + ${nameToDisplay(name2, selected2)}`
+    : null
 
   return (
-    <div className="screen">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button className="btn btn-ghost" onClick={() => navigate('/')} style={{ padding: '8px 4px', minHeight: 0 }}>
-          ← Back
-        </button>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--color-blue)', letterSpacing: '0.05em' }}>
-          TOURNAMENT
-        </h2>
-      </div>
+    <div className="screen" style={{ padding: '20px 20px 32px', gap: 0 }}>
+      <button
+        className="btn btn-ghost"
+        onClick={() => navigate('/')}
+        style={{ padding: '8px 4px', minHeight: 0, alignSelf: 'flex-start', marginBottom: 24 }}
+      >
+        ← Back
+      </button>
 
+      <h2 style={{
+        fontFamily: 'var(--font-display)',
+        fontSize: '1.4rem',
+        letterSpacing: '0.06em',
+        color: 'var(--color-blue)',
+        marginBottom: 6,
+      }}>
+        CREATE TOURNAMENT
+      </h2>
+      <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: 24, lineHeight: 1.5 }}>
+        Set up your tournament, then share the code for other teams to join.
+      </p>
+
+      {/* Tournament name */}
       <input
-        value={name}
-        onChange={e => setName(e.target.value)}
-        placeholder="Tournament name..."
-        style={{ width: '100%', padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-elevated)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--color-text)', fontSize: '1rem', marginBottom: 14 }}
+        value={tournamentName}
+        onChange={e => setTournamentName(e.target.value)}
+        placeholder="Tournament name (optional)"
+        style={{
+          width: '100%',
+          padding: '12px 14px',
+          borderRadius: 'var(--radius-md)',
+          background: 'var(--color-bg-elevated)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          color: 'var(--color-text)',
+          fontSize: '1rem',
+          marginBottom: 20,
+          boxSizing: 'border-box',
+        }}
       />
 
-      {/* Format */}
-      <div className="section-title">Format</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+      {/* Format picker */}
+      <div style={{
+        fontSize: '0.65rem',
+        fontFamily: 'var(--font-display)',
+        color: 'var(--color-text-muted)',
+        letterSpacing: '0.2em',
+        marginBottom: 10,
+      }}>
+        FORMAT
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
         {FORMATS.map(opt => (
           <button
             key={opt.key}
             onClick={() => setFormat(opt.key)}
             style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '12px 14px', borderRadius: 'var(--radius-md)',
-              background: format === opt.key ? 'var(--color-blue)22' : 'var(--color-bg-elevated)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: format === opt.key ? 'rgba(26,140,255,0.12)' : 'var(--color-bg-elevated)',
               border: `2px solid ${format === opt.key ? 'var(--color-blue)' : 'transparent'}`,
-              cursor: 'pointer', textAlign: 'left',
+              cursor: 'pointer',
+              textAlign: 'left',
             }}
           >
             <div style={{
-              width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-              background: format === opt.key ? 'var(--color-blue)' : 'var(--color-bg-card)',
+              width: 18,
+              height: 18,
+              borderRadius: '50%',
+              flexShrink: 0,
+              background: format === opt.key ? 'var(--color-blue)' : 'transparent',
               border: `2px solid ${format === opt.key ? 'var(--color-blue)' : 'rgba(255,255,255,0.2)'}`,
             }} />
             <div>
-              <div style={{ fontWeight: 700, color: format === opt.key ? 'var(--color-text)' : 'var(--color-text-muted)' }}>{opt.label}</div>
+              <div style={{ fontWeight: 700, color: format === opt.key ? 'var(--color-text)' : 'var(--color-text-muted)', fontSize: '0.95rem' }}>
+                {opt.label}
+              </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dim)' }}>{opt.desc}</div>
             </div>
           </button>
         ))}
       </div>
 
-      {/* Teams */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div className="section-title" style={{ margin: 0 }}>Teams ({teams.length})</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {teams.length > 1 && (
-            <button className="btn btn-ghost" onClick={handleSeedByWinRate} style={{ minHeight: 0, padding: '4px 10px', fontSize: '0.75rem' }}>
-              📊 Seed by W%
-            </button>
-          )}
-          {teams.length > 1 && (
-            <button className="btn btn-ghost" onClick={handleShuffle} style={{ minHeight: 0, padding: '4px 10px', fontSize: '0.75rem' }}>
-              🔀 Shuffle
-            </button>
-          )}
+      {/* Host team */}
+      <div style={{
+        fontSize: '0.65rem',
+        fontFamily: 'var(--font-display)',
+        color: 'var(--color-team1)',
+        letterSpacing: '0.2em',
+        marginBottom: 10,
+      }}>
+        YOUR TEAM
+      </div>
+
+      <PlayerNameInput
+        value={name1}
+        onChange={setName1}
+        onSelect={setSelected1}
+        players={players}
+        placeholder="First Last"
+        color="var(--color-team1)"
+        autoFocus
+      />
+
+      <div style={{
+        textAlign: 'center',
+        fontFamily: 'var(--font-display)',
+        fontSize: '1.1rem',
+        color: 'var(--color-team1)',
+        opacity: 0.45,
+        margin: '6px 0',
+      }}>
+        +
+      </div>
+
+      <PlayerNameInput
+        value={name2}
+        onChange={setName2}
+        onSelect={setSelected2}
+        players={players}
+        placeholder="First Last"
+        color="var(--color-team1)"
+      />
+
+      {preview && (
+        <div style={{
+          marginTop: 10,
+          textAlign: 'center',
+          padding: '7px 12px',
+          borderRadius: 'var(--radius-md)',
+          background: 'rgba(64,196,255,0.07)',
+          border: '1px solid rgba(64,196,255,0.25)',
+          fontSize: '0.82rem',
+          fontWeight: 700,
+          color: 'var(--color-team1)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {preview}
         </div>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-        {teams.map((t, i) => (
-          <div key={t.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <span style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text-dim)', width: 24 }}>#{i + 1}</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700 }}>{t.name}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                {t.playerIds.map(id => { const p = players.find(x => x.id === id); return p ? playerDisplayName(p) : id }).join(' + ')}
-              </div>
-            </div>
-            <button
-              onClick={() => setTeams(teams.filter(x => x.id !== t.id))}
-              style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', fontSize: '1rem' }}
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {teams.length < 16 && (
-        <button className="btn btn-secondary" onClick={() => setStep('add-team')} style={{ width: '100%', marginBottom: 16 }}>
-          + Add Team
-        </button>
       )}
 
-      {teams.length < 3 && (
-        <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: 12 }}>
-          Add at least 3 teams to start.
-        </p>
-      )}
+      <div style={{ flex: 1 }} />
 
       <button
         className="btn btn-primary"
-        onClick={handleStart}
-        disabled={teams.length < 3 || starting}
-        style={{ width: '100%', fontFamily: 'var(--font-display)', fontSize: '1.1rem', letterSpacing: '0.1em', padding: '16px' }}
+        onClick={handleCreate}
+        disabled={!canCreate || creating}
+        style={{
+          width: '100%',
+          fontFamily: 'var(--font-display)',
+          fontSize: '1.2rem',
+          letterSpacing: '0.1em',
+          padding: '18px',
+          marginTop: 24,
+          opacity: canCreate ? 1 : 0.35,
+          transition: 'opacity 0.2s',
+          background: 'var(--color-blue)',
+        }}
       >
-        {starting ? 'CREATING...' : 'START TOURNAMENT'}
+        {creating ? 'CREATING...' : '🏆 CREATE TOURNAMENT'}
       </button>
     </div>
   )

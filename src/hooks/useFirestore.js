@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  collection, doc, setDoc, getDoc, getDocs, deleteDoc,
+  collection, doc, setDoc, getDoc, getDocs, deleteDoc, updateDoc, arrayUnion,
   query, orderBy, onSnapshot, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../utils/firebase'
@@ -47,6 +47,36 @@ export async function joinLobby(roomCode, team1, team2) {
     id: roomCode,
     status: 'active',
     createdAt: serverTimestamp(),
+  })
+}
+
+// ─── Tournament lobby helpers ─────────────────────────────────────────────────
+
+export async function createTournamentLobby(roomCode, name, format, hostTeam) {
+  await setDoc(doc(db, 'tournaments', roomCode), {
+    id: roomCode,
+    status: 'lobby',
+    name,
+    format,
+    teams: [hostTeam],
+    bracket: null,
+    championId: null,
+    completedAt: null,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function joinTournamentLobby(roomCode, team) {
+  await updateDoc(doc(db, 'tournaments', roomCode), {
+    teams: arrayUnion(team),
+  })
+}
+
+export async function startTournament(roomCode, tournamentData, bracket) {
+  await setDoc(doc(db, 'tournaments', roomCode), {
+    ...tournamentData,
+    bracket,
+    status: 'active',
   })
 }
 
