@@ -105,13 +105,15 @@ export default function LiveGame() {
     )
   }
 
-  const { team1Score, team2Score, currentRound, currentHalf, isOvertime } = gameState
+  const { team1Score, team2Score, currentRound, currentHalf, currentThrowInHalf, isOvertime } = gameState
   const { team, playerIndex, teamKey } = getCurrentThrower(gameState)
   const throwerName = team?.playerIds
     ? (team.playerNames?.[playerIndex] || `Player ${playerIndex + 1}`)
     : '?'
 
   const teamColor = teamKey === 'team1' ? 'var(--color-team1)' : 'var(--color-team2)'
+  const throwsPerTurn = team?.playerIds?.length || 1
+  const showThrowIndicator = throwsPerTurn > 1
 
   return (
     <div
@@ -229,8 +231,24 @@ export default function LiveGame() {
           </div>
         ) : (
           <>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: 2 }}>
-              NOW THROWING
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 2 }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                NOW THROWING
+              </div>
+              {showThrowIndicator && (
+                <div style={{
+                  fontSize: '0.65rem',
+                  fontFamily: 'var(--font-display)',
+                  color: teamColor,
+                  background: `${teamColor}22`,
+                  border: `1px solid ${teamColor}55`,
+                  borderRadius: 6,
+                  padding: '1px 7px',
+                  letterSpacing: '0.05em',
+                }}>
+                  {currentThrowInHalf + 1}/{throwsPerTurn}
+                </div>
+              )}
             </div>
             <div style={{
               fontFamily: 'var(--font-display)',

@@ -6,6 +6,16 @@ const THROW_LABELS = {
   miss: 'Miss', dinger: 'Dinger', deuce: 'Deuce', bucket: 'Bucket', instant_win: '⚡ IW',
 }
 
+function ThrowLabel({ thr, color }) {
+  if (!thr) return <span style={{ color: 'var(--color-text-dim)' }}>—</span>
+  return (
+    <span style={{ color: thr.busted ? 'var(--color-danger)' : color }}>
+      {THROW_LABELS[thr.type] || thr.type}
+      {thr.busted ? ' (bust)' : thr.points > 0 ? ` +${thr.points}` : ''}
+    </span>
+  )
+}
+
 export default function GameHistory() {
   const navigate = useNavigate()
   const { games, loading, deleteGame } = useGames()
@@ -142,24 +152,28 @@ export default function GameHistory() {
                         {game.team2?.name}
                       </span>
                     </div>
-                    {(game.rounds || []).map(r => (
-                      <div key={r.roundNumber} style={{
-                        display: 'grid',
-                        gridTemplateColumns: '32px 1fr 1fr',
-                        gap: 6,
-                        fontSize: '0.78rem',
-                        padding: '3px 0',
-                        borderBottom: '1px solid rgba(255,255,255,0.04)',
-                      }}>
-                        <span style={{ color: 'var(--color-text-dim)', fontFamily: 'var(--font-display)', fontSize: '0.65rem' }}>R{r.roundNumber}</span>
-                        <span style={{ color: r.team1Throw?.busted ? 'var(--color-danger)' : 'var(--color-team1)' }}>
-                          {r.team1Throw ? `${THROW_LABELS[r.team1Throw.type] || r.team1Throw.type}${r.team1Throw.busted ? ' (bust)' : r.team1Throw.points > 0 ? ` +${r.team1Throw.points}` : ''}` : '—'}
-                        </span>
-                        <span style={{ color: r.team2Throw?.busted ? 'var(--color-danger)' : 'var(--color-team2)' }}>
-                          {r.team2Throw ? `${THROW_LABELS[r.team2Throw.type] || r.team2Throw.type}${r.team2Throw.busted ? ' (bust)' : r.team2Throw.points > 0 ? ` +${r.team2Throw.points}` : ''}` : '—'}
-                        </span>
-                      </div>
-                    ))}
+                    {(game.rounds || []).map(r => {
+                      // Support both old (team1Throw) and new (team1Throws) format
+                      const t1s = r.team1Throws || (r.team1Throw ? [r.team1Throw] : [])
+                      const t2s = r.team2Throws || (r.team2Throw ? [r.team2Throw] : [])
+                      const rows = Math.max(t1s.length, t2s.length, 1)
+                      return Array.from({ length: rows }, (_, i) => (
+                        <div key={`${r.roundNumber}-${i}`} style={{
+                          display: 'grid',
+                          gridTemplateColumns: '32px 1fr 1fr',
+                          gap: 6,
+                          fontSize: '0.78rem',
+                          padding: '3px 0',
+                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                        }}>
+                          <span style={{ color: 'var(--color-text-dim)', fontFamily: 'var(--font-display)', fontSize: '0.65rem' }}>
+                            {i === 0 ? `R${r.roundNumber}` : ''}
+                          </span>
+                          <ThrowLabel thr={t1s[i]} color="var(--color-team1)" />
+                          <ThrowLabel thr={t2s[i]} color="var(--color-team2)" />
+                        </div>
+                      ))
+                    })}
                   </div>
 
                   {/* Delete */}

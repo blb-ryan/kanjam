@@ -50,10 +50,14 @@ export default function GameOver() {
   const isTeam1Winner = winnerId === team1?.id
   const winColor = isTeam1Winner ? 'var(--color-team1)' : 'var(--color-team2)'
 
-  // Per-player stats
+  // Per-player stats — handles both old (team1Throw) and new (team1Throws) format
   const playerStats = {}
   for (const round of rounds || []) {
-    for (const [, thr] of [['team1Throw', round.team1Throw], ['team2Throw', round.team2Throw]]) {
+    const allRoundThrows = [
+      ...(round.team1Throws || (round.team1Throw ? [round.team1Throw] : [])),
+      ...(round.team2Throws || (round.team2Throw ? [round.team2Throw] : [])),
+    ]
+    for (const thr of allRoundThrows) {
       if (!thr) continue
       const pid = thr.throwerPlayerId
       if (!pid) continue
@@ -245,21 +249,28 @@ export default function GameOver() {
           </button>
           {showRounds && (
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {rounds.map(r => (
-                <div key={r.roundNumber} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '32px 1fr 1fr',
-                  gap: 8,
-                  fontSize: '0.8rem',
-                  alignItems: 'center',
-                  padding: '4px 0',
-                  borderBottom: '1px solid rgba(255,255,255,0.05)',
-                }}>
-                  <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-display)', fontSize: '0.7rem' }}>R{r.roundNumber}</span>
-                  <ThrowSummary thr={r.team1Throw} color="var(--color-team1)" />
-                  <ThrowSummary thr={r.team2Throw} color="var(--color-team2)" />
-                </div>
-              ))}
+              {rounds.map(r => {
+                const t1s = r.team1Throws || (r.team1Throw ? [r.team1Throw] : [])
+                const t2s = r.team2Throws || (r.team2Throw ? [r.team2Throw] : [])
+                const rows = Math.max(t1s.length, t2s.length, 1)
+                return Array.from({ length: rows }, (_, i) => (
+                  <div key={`${r.roundNumber}-${i}`} style={{
+                    display: 'grid',
+                    gridTemplateColumns: '32px 1fr 1fr',
+                    gap: 8,
+                    fontSize: '0.8rem',
+                    alignItems: 'center',
+                    padding: '4px 0',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  }}>
+                    <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-display)', fontSize: '0.7rem' }}>
+                      {i === 0 ? `R${r.roundNumber}` : ''}
+                    </span>
+                    <ThrowSummary thr={t1s[i]} color="var(--color-team1)" />
+                    <ThrowSummary thr={t2s[i]} color="var(--color-team2)" />
+                  </div>
+                ))
+              })}
             </div>
           )}
         </div>
