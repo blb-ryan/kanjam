@@ -46,7 +46,7 @@ export default function PlayerSetup() {
       <button
         className="btn btn-ghost"
         onClick={() => navigate('/')}
-        style={{ padding: '8px 4px', minHeight: 0, alignSelf: 'flex-start', marginBottom: 28 }}
+        style={{ padding: '8px 4px', minHeight: 0, alignSelf: 'flex-start', marginBottom: 24 }}
       >
         ← Back
       </button>
@@ -62,11 +62,11 @@ export default function PlayerSetup() {
       </h2>
 
       {/* Team 1 */}
-      <TeamNameRow
+      <TeamBlock
         color="var(--color-team1)"
         label="TEAM 1"
-        valueA={p1t1} onChangeA={setP1t1} placeholderA="Player 1"
-        valueB={p2t1} onChangeB={setP2t1} placeholderB="Player 2"
+        valueA={p1t1} onChangeA={setP1t1}
+        valueB={p2t1} onChangeB={setP2t1}
         refA={null} refB={ref1b}
         onEnterA={() => ref1b.current?.focus()}
         onEnterB={() => ref2a.current?.focus()}
@@ -80,23 +80,15 @@ export default function PlayerSetup() {
       </div>
 
       {/* Team 2 */}
-      <TeamNameRow
+      <TeamBlock
         color="var(--color-team2)"
         label="TEAM 2"
-        valueA={p1t2} onChangeA={setP1t2} placeholderA="Player 1"
-        valueB={p2t2} onChangeB={setP2t2} placeholderB="Player 2"
+        valueA={p1t2} onChangeA={setP1t2}
+        valueB={p2t2} onChangeB={setP2t2}
         refA={ref2a} refB={ref2b}
         onEnterA={() => ref2b.current?.focus()}
         onEnterB={canStart ? handleStart : undefined}
       />
-
-      {/* Team name previews */}
-      {(p1t1.trim() || p2t1.trim() || p1t2.trim() || p2t2.trim()) && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, margin: '20px 0 4px' }}>
-          <TeamPreview color="var(--color-team1)" a={p1t1.trim()} b={p2t1.trim()} />
-          <TeamPreview color="var(--color-team2)" a={p1t2.trim()} b={p2t2.trim()} />
-        </div>
-      )}
 
       <div style={{ flex: 1 }} />
 
@@ -121,17 +113,74 @@ export default function PlayerSetup() {
   )
 }
 
-function TeamNameRow({ color, label, valueA, onChangeA, placeholderA, valueB, onChangeB, placeholderB, refA, refB, onEnterA, onEnterB }) {
+function TeamBlock({ color, label, valueA, onChangeA, valueB, onChangeB, refA, refB, onEnterA, onEnterB }) {
+  const previewName = valueA.trim() && valueB.trim()
+    ? `${valueA.trim()} + ${valueB.trim()}`
+    : null
+
   return (
     <div>
-      <div style={{ fontSize: '0.65rem', fontFamily: 'var(--font-display)', color, letterSpacing: '0.2em', marginBottom: 10 }}>
+      <div style={{
+        fontSize: '0.65rem',
+        fontFamily: 'var(--font-display)',
+        color,
+        letterSpacing: '0.2em',
+        marginBottom: 10,
+      }}>
         {label}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <NameInput ref={refA} value={valueA} onChange={onChangeA} placeholder={placeholderA} color={color} onEnter={onEnterA} />
-        <span style={{ fontFamily: 'var(--font-display)', color, fontSize: '1.1rem', flexShrink: 0 }}>+</span>
-        <NameInput ref={refB} value={valueB} onChange={onChangeB} placeholder={placeholderB} color={color} onEnter={onEnterB} />
+
+      {/* Player 1 */}
+      <NameInput
+        ref={refA}
+        value={valueA}
+        onChange={onChangeA}
+        placeholder="Player 1"
+        color={color}
+        onEnter={onEnterA}
+      />
+
+      {/* + connector */}
+      <div style={{
+        textAlign: 'center',
+        fontFamily: 'var(--font-display)',
+        fontSize: '1.1rem',
+        color,
+        opacity: 0.5,
+        margin: '6px 0',
+      }}>
+        +
       </div>
+
+      {/* Player 2 */}
+      <NameInput
+        ref={refB}
+        value={valueB}
+        onChange={onChangeB}
+        placeholder="Player 2"
+        color={color}
+        onEnter={onEnterB}
+      />
+
+      {/* Live preview */}
+      {previewName && (
+        <div style={{
+          marginTop: 10,
+          textAlign: 'center',
+          padding: '7px 12px',
+          borderRadius: 'var(--radius-md)',
+          background: `${color}12`,
+          border: `1px solid ${color}44`,
+          fontSize: '0.82rem',
+          fontWeight: 700,
+          color,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {previewName}
+        </div>
+      )}
     </div>
   )
 }
@@ -146,7 +195,7 @@ function NameInput({ value, onChange, placeholder, color, onEnter, ref: external
       placeholder={placeholder}
       maxLength={16}
       style={{
-        flex: 1,
+        width: '100%',
         padding: '13px 14px',
         borderRadius: 'var(--radius-md)',
         background: 'var(--color-bg-elevated)',
@@ -159,27 +208,5 @@ function NameInput({ value, onChange, placeholder, color, onEnter, ref: external
         boxSizing: 'border-box',
       }}
     />
-  )
-}
-
-function TeamPreview({ color, a, b }) {
-  const name = a && b ? `${a} + ${b}` : a || b || ''
-  if (!name) return <div />
-  return (
-    <div style={{
-      textAlign: 'center',
-      padding: '8px 10px',
-      borderRadius: 'var(--radius-md)',
-      background: `${color}12`,
-      border: `1px solid ${color}44`,
-      fontSize: '0.8rem',
-      fontWeight: 700,
-      color,
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap',
-    }}>
-      {name}
-    </div>
   )
 }
