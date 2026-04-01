@@ -1,43 +1,33 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateUniqueRoomCode } from '../utils/roomCode'
+import { createLobby } from '../hooks/useFirestore'
 
 export default function PlayerSetup() {
   const navigate = useNavigate()
-  const [p1t1, setP1t1] = useState('') // Team 1, Player 1
-  const [p2t1, setP2t1] = useState('') // Team 1, Player 2
-  const [p1t2, setP1t2] = useState('') // Team 2, Player 1
-  const [p2t2, setP2t2] = useState('') // Team 2, Player 2
-  const [generating, setGenerating] = useState(false)
+  const [p1, setP1] = useState('')
+  const [p2, setP2] = useState('')
+  const [creating, setCreating] = useState(false)
+  const ref2 = useRef(null)
 
-  const ref1b = useRef(null)
-  const ref2a = useRef(null)
-  const ref2b = useRef(null)
+  const canCreate = p1.trim() && p2.trim()
 
-  const canStart = p1t1.trim() && p2t1.trim() && p1t2.trim() && p2t2.trim()
-
-  const handleStart = async () => {
-    if (!canStart) return
-    setGenerating(true)
+  const handleCreate = async () => {
+    if (!canCreate) return
+    setCreating(true)
     try {
       const roomCode = await generateUniqueRoomCode()
-      const n1a = p1t1.trim(), n1b = p2t1.trim()
-      const n2a = p1t2.trim(), n2b = p2t2.trim()
+      const n1 = p1.trim(), n2 = p2.trim()
       const team1 = {
         id: crypto.randomUUID(),
-        name: `${n1a} + ${n1b}`,
+        name: `${n1} + ${n2}`,
         playerIds: [crypto.randomUUID(), crypto.randomUUID()],
-        playerNames: [n1a, n1b],
+        playerNames: [n1, n2],
       }
-      const team2 = {
-        id: crypto.randomUUID(),
-        name: `${n2a} + ${n2b}`,
-        playerIds: [crypto.randomUUID(), crypto.randomUUID()],
-        playerNames: [n2a, n2b],
-      }
-      navigate('/game', { state: { team1, team2, roomCode } })
+      await createLobby(roomCode, team1)
+      navigate('/lobby', { state: { roomCode, team1 } })
     } catch {
-      setGenerating(false)
+      setCreating(false)
     }
   }
 
@@ -56,46 +46,78 @@ export default function PlayerSetup() {
         fontSize: '1.4rem',
         letterSpacing: '0.06em',
         color: 'var(--color-orange)',
-        marginBottom: 28,
+        marginBottom: 6,
       }}>
-        WHO'S PLAYING?
+        YOUR TEAM
       </h2>
+      <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: 28, lineHeight: 1.5 }}>
+        Enter your names. You'll get a code to share with the other team.
+      </p>
 
-      {/* Team 1 */}
-      <TeamBlock
-        color="var(--color-team1)"
-        label="TEAM 1"
-        valueA={p1t1} onChangeA={setP1t1}
-        valueB={p2t1} onChangeB={setP2t1}
-        refA={null} refB={ref1b}
-        onEnterA={() => ref1b.current?.focus()}
-        onEnterB={() => ref2a.current?.focus()}
-      />
-
-      {/* VS divider */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
-        <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-        <span style={{ color: 'var(--color-text-dim)', fontFamily: 'var(--font-display)', fontSize: '0.8rem', letterSpacing: '0.15em' }}>VS</span>
-        <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+      <div style={{
+        fontSize: '0.65rem',
+        fontFamily: 'var(--font-display)',
+        color: 'var(--color-team1)',
+        letterSpacing: '0.2em',
+        marginBottom: 10,
+      }}>
+        TEAM 1
       </div>
 
-      {/* Team 2 */}
-      <TeamBlock
-        color="var(--color-team2)"
-        label="TEAM 2"
-        valueA={p1t2} onChangeA={setP1t2}
-        valueB={p2t2} onChangeB={setP2t2}
-        refA={ref2a} refB={ref2b}
-        onEnterA={() => ref2b.current?.focus()}
-        onEnterB={canStart ? handleStart : undefined}
+      <NameInput
+        value={p1}
+        onChange={setP1}
+        placeholder="Player 1"
+        color="var(--color-team1)"
+        onEnter={() => ref2.current?.focus()}
+        autoFocus
       />
+
+      <div style={{
+        textAlign: 'center',
+        fontFamily: 'var(--font-display)',
+        fontSize: '1.1rem',
+        color: 'var(--color-team1)',
+        opacity: 0.45,
+        margin: '6px 0',
+      }}>
+        +
+      </div>
+
+      <NameInput
+        inputRef={ref2}
+        value={p2}
+        onChange={setP2}
+        placeholder="Player 2"
+        color="var(--color-team1)"
+        onEnter={canCreate ? handleCreate : undefined}
+      />
+
+      {p1.trim() && p2.trim() && (
+        <div style={{
+          marginTop: 10,
+          textAlign: 'center',
+          padding: '7px 12px',
+          borderRadius: 'var(--radius-md)',
+          background: 'rgba(64,196,255,0.07)',
+          border: '1px solid rgba(64,196,255,0.25)',
+          fontSize: '0.82rem',
+          fontWeight: 700,
+          color: 'var(--color-team1)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {p1.trim()} + {p2.trim()}
+        </div>
+      )}
 
       <div style={{ flex: 1 }} />
 
       <button
         className="btn btn-primary"
-        onClick={handleStart}
-        disabled={!canStart || generating}
+        onClick={handleCreate}
+        disabled={!canCreate || creating}
         style={{
           width: '100%',
           fontFamily: 'var(--font-display)',
@@ -103,97 +125,26 @@ export default function PlayerSetup() {
           letterSpacing: '0.1em',
           padding: '18px',
           marginTop: 24,
-          opacity: canStart ? 1 : 0.35,
+          opacity: canCreate ? 1 : 0.35,
           transition: 'opacity 0.2s',
         }}
       >
-        {generating ? 'STARTING...' : '🥏 LET\'S PLAY'}
+        {creating ? 'CREATING...' : '🥏 CREATE GAME'}
       </button>
     </div>
   )
 }
 
-function TeamBlock({ color, label, valueA, onChangeA, valueB, onChangeB, refA, refB, onEnterA, onEnterB }) {
-  const previewName = valueA.trim() && valueB.trim()
-    ? `${valueA.trim()} + ${valueB.trim()}`
-    : null
-
-  return (
-    <div>
-      <div style={{
-        fontSize: '0.65rem',
-        fontFamily: 'var(--font-display)',
-        color,
-        letterSpacing: '0.2em',
-        marginBottom: 10,
-      }}>
-        {label}
-      </div>
-
-      {/* Player 1 */}
-      <NameInput
-        ref={refA}
-        value={valueA}
-        onChange={onChangeA}
-        placeholder="Player 1"
-        color={color}
-        onEnter={onEnterA}
-      />
-
-      {/* + connector */}
-      <div style={{
-        textAlign: 'center',
-        fontFamily: 'var(--font-display)',
-        fontSize: '1.1rem',
-        color,
-        opacity: 0.5,
-        margin: '6px 0',
-      }}>
-        +
-      </div>
-
-      {/* Player 2 */}
-      <NameInput
-        ref={refB}
-        value={valueB}
-        onChange={onChangeB}
-        placeholder="Player 2"
-        color={color}
-        onEnter={onEnterB}
-      />
-
-      {/* Live preview */}
-      {previewName && (
-        <div style={{
-          marginTop: 10,
-          textAlign: 'center',
-          padding: '7px 12px',
-          borderRadius: 'var(--radius-md)',
-          background: `${color}12`,
-          border: `1px solid ${color}44`,
-          fontSize: '0.82rem',
-          fontWeight: 700,
-          color,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}>
-          {previewName}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NameInput({ value, onChange, placeholder, color, onEnter, ref: externalRef }) {
+function NameInput({ value, onChange, placeholder, color, onEnter, autoFocus, inputRef }) {
   return (
     <input
-      ref={externalRef}
+      ref={inputRef}
       value={value}
       onChange={e => onChange(e.target.value)}
       onKeyDown={e => e.key === 'Enter' && onEnter?.()}
       placeholder={placeholder}
       maxLength={16}
+      autoFocus={autoFocus}
       style={{
         width: '100%',
         padding: '13px 14px',

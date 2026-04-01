@@ -4,6 +4,29 @@ import {
   query, orderBy, onSnapshot, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../utils/firebase'
+import { createInitialGameState } from '../utils/gameLogic'
+
+// ─── Lobby helpers (standalone, not hooks) ────────────────────────────────────
+
+export async function createLobby(roomCode, team1) {
+  await setDoc(doc(db, 'games', roomCode), {
+    status: 'lobby',
+    id: roomCode,
+    team1,
+    team2: null,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function joinLobby(roomCode, team1, team2) {
+  const initialState = createInitialGameState(team1, team2)
+  await setDoc(doc(db, 'games', roomCode), {
+    ...initialState,
+    id: roomCode,
+    status: 'active',
+    createdAt: serverTimestamp(),
+  })
+}
 
 export function usePlayers() {
   const [players, setPlayers] = useState([])

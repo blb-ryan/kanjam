@@ -83,3 +83,9 @@
 .animate-spin-in      { animation: spinIn 0.4s ease forwards; }
 .animate-fade-in      { animation: fadeIn 0.3s ease forwards; }
 .animate-num-flash    { animation: numFlash 0.4s ease forwards; }
+
+/* Spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.animate-spin { animation: spin 0.8s linear infinite; }
